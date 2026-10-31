@@ -24,6 +24,7 @@ class _PlayerPageState extends State<PlayerPage> {
   String _error = '', _streamType = 'sub';
   double _speed = 1;
   Timer? _hideTimer;
+  bool _autoFallbackInProgress = false;
 
   @override
   void initState() {
@@ -71,7 +72,7 @@ class _PlayerPageState extends State<PlayerPage> {
             type: _streamType,
             server: serverName,
           );
-          final resolved = _extractSources(streamResponse);
+          final resolved = _extractSources(streamResponse, serverName);
           sources.addAll(resolved);
         } catch (_) {
           // Try the next available server if this provider fails.
@@ -87,15 +88,11 @@ class _PlayerPageState extends State<PlayerPage> {
         return;
       }
       setState(() => _sources = playable);
-      Object? lastError;
-      for (var i = 0; i < playable.length; i++) {
-        try {
-          await _playSource(i);
-          return;
-        } catch (error) {
-          lastError = error;
-        }
+      final started = await _tryServersFrom(0);
+      if (started) {
+        return;
       }
+      const lastError = 'Every available server failed to start playback.';
       throw Exception(lastError ?? 'Every available server failed.');
     } catch (error) {
       if (mounted) {
@@ -107,7 +104,7 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
-  List<_StreamSource> _extractSources(dynamic value) {
+  List<_StreamSource> _extractSources(dynamic value, String serverName) {
     final found = <_StreamSource>[];
     void walk(dynamic node, [String name = 'Server']) {
       if (node is List) {
@@ -127,8 +124,9 @@ class _PlayerPageState extends State<PlayerPage> {
               node['isM3U8'] == true || node['playbackMode'] == 'hls';
           if (isHttp && isMedia) {
             found.add(_StreamSource(
-              url == node['hlsProxyUrl'] ? '$label (Proxy)' : '$label (Direct)',
+              url == node['hlsProxyUrl'] ? '$serverName (Proxy)' : '$serverName (Direct)',
               url,
+              serverName,
             ));
             extracted = true;
           }
@@ -145,6 +143,74 @@ class _PlayerPageState extends State<PlayerPage> {
     walk(value);
     final unique = <String>{};
     return found.where((source) => unique.add(source.url)).toList();
+  }
+
+  Future<bool> _tryServersFrom(int startIndex) async {
+    Object? lastError;
+    final attemptedServers = <String>{};
+    for (var i = startIndex; i < _sources.length; i++) {
+      final serverName = _sources[i].serverName;
+      if (!attemptedServers.add(serverName)) {
+        continue;
+      }
+      try {
+        await _playSource(i);
+        return true;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _loading = false;
+        _error = lastError?.toString().replaceFirst('Exception: ', '') ??
+            'No other streaming servers are available.';
+      });
+    }
+    return false;
+  }
+
+  void _handlePlaybackUpdate(VideoPlayerController controller, int index) {
+    if (!mounted ||
+        !identical(_controller, controller) ||
+        !controller.value.hasError ||
+        _autoFallbackInProgress) {
+      return;
+    }
+    _autoFallbackInProgress = true;
+    final failedServer = _sources[index].serverName;
+    // Start at the next different server, skipping alternate URLs from the
+    // failed server (for example HD-1 Direct after HD-1 Proxy).
+    var nextIndex = index + 1;
+    while (nextIndex < _sources.length &&
+        _sources[nextIndex].serverName == failedServer) {
+      nextIndex++;
+    }
+    if (nextIndex >= _sources.length) {
+      nextIndex = 0;
+      while (nextIndex < _sources.length &&
+          _sources[nextIndex].serverName == failedServer) {
+        nextIndex++;
+      }
+    }
+    if (mounted) {
+      setState(() {
+        _loading = true;
+        _error = 'Server $failedServer failed. Trying another server…';
+      });
+    }
+    Future<void>(() async {
+      final started = nextIndex < _sources.length
+          ? await _tryServersFrom(nextIndex)
+          : false;
+      if (!started && mounted) {
+        setState(() {
+          _loading = false;
+          _error = 'Playback failed on $failedServer and no fallback server worked.';
+        });
+      }
+      _autoFallbackInProgress = false;
+    });
   }
 
   Future<void> _playSource(int index) async {
@@ -170,6 +236,7 @@ class _PlayerPageState extends State<PlayerPage> {
       }
       final previous = _controller;
       setState(() { _controller = next; _selectedSource = index; _loading = false; _error = ''; });
+      next.addListener(() => _handlePlaybackUpdate(next!, index));
       await next.play();
       await previous?.dispose();
       _scheduleHide();
@@ -237,9 +304,9 @@ class _PlayerPageState extends State<PlayerPage> {
             tooltip: 'Change server', icon: const Icon(Icons.dns_outlined),
             onSelected: (index) async {
               setState(() => _loading = true);
-              try { await _playSource(index); } catch (error) { if (mounted) {
-                setState(() { _loading = false; _error = error.toString(); });
-              } }
+              try { await _playSource(index); } catch (_) {
+                await _tryServersFrom(index + 1);
+              }
             },
             itemBuilder: (_) => _sources.asMap().entries.map((entry) => PopupMenuItem(
               value: entry.key,
@@ -354,6 +421,6 @@ class _PlayerPageState extends State<PlayerPage> {
 }
 
 class _StreamSource {
-  const _StreamSource(this.name, this.url);
-  final String name, url;
+  const _StreamSource(this.name, this.url, this.serverName);
+  final String name, url, serverName;
 }
