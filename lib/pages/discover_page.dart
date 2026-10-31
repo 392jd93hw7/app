@@ -23,14 +23,21 @@ class _DiscoverPageState extends State<DiscoverPage> {
   void search(String value) {
     query = value.trim();
     debounce?.cancel();
-    if (query.isEmpty) { setState(() { results = []; error = null; loading = false; }); return; }
+    if (query.isEmpty) {
+      setState(() { results = []; error = null; loading = false; });
+      return;
+    }
     debounce = Timer(const Duration(milliseconds: 400), () async {
       setState(() { loading = true; error = null; });
       try {
         final found = await AnimeApi.search(query);
-        if (mounted) setState(() { results = found; loading = false; });
+        if (mounted) {
+          setState(() { results = found; loading = false; });
+        }
       } catch (e) {
-        if (mounted) setState(() { results = []; loading = false; error = 'Search failed: $e'; });
+        if (mounted) {
+          setState(() { results = []; loading = false; error = 'Search failed: $e'; });
+        }
       }
     });
   }
