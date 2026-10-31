@@ -88,7 +88,8 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
             final number = _episodeNumber(item, entry.key + 1);
             final title = item is Map ? (item['title'] ?? item['canonicalTitle'] ?? item['name'] ?? 'Episode $number').toString() : 'Episode $number';
             final synopsis = item is Map ? (item['description'] ?? item['synopsis'] ?? '').toString() : '';
-            return _episodeTile(number, title, synopsis);
+            final thumbnail = item is Map ? (item['thumbnail'] ?? '').toString() : '';
+            return _episodeTile(number, title, synopsis, thumbnail);
           }).toList());
         }),
       ]))),
