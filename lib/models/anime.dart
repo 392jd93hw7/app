@@ -43,7 +43,7 @@ class Anime {
       genres: genresValue is List ? genresValue.map((e) => e is Map ? (e['name'] ?? '').toString() : e.toString()).where((e) => e.isNotEmpty).toList() : const [],
       banner: (bannerValue ?? '').toString(),
       source: (j['source'] ?? (j['malId'] != null ? 'mal' : 'anilist')).toString(),
-      malId: (j['malId'] ?? j['mal_id'] ?? '').toString(),
+      malId: (j['malId'] ?? j['mal_id'] ?? j['idMal'] ?? '').toString(),
       format: (j['format'] ?? j['type'] ?? '').toString(),
       status: (j['status'] ?? '').toString(),
       episodeCount: int.tryParse((j['episodes'] ?? j['episodeCount'] ?? '').toString()),
