@@ -113,6 +113,8 @@ class AnimeApi {
 
   static Future<List<dynamic>> airingSchedule() async {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final weekAgo = now - 7 * 24 * 60 * 60;
+    final weekAhead = now + 7 * 24 * 60 * 60;
     final data = await _aniList('''
       query ($after: Int) {
         Page(page: 1, perPage: 50) {
@@ -122,7 +124,7 @@ class AnimeApi {
           }
         }
       }
-    ''', {'after': now});
+    ''', {'after': weekAgo, 'before': weekAhead});
     final page = data is Map ? data['Page'] : null;
     return page is Map && page['airingSchedules'] is List
         ? page['airingSchedules'] as List<dynamic>
