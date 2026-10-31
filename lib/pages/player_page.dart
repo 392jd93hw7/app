@@ -35,7 +35,7 @@ class _PlayerPageState extends State<PlayerPage> {
   Future<void> _loadSources() async {
     if (mounted) setState(() { _loading = true; _error = ''; });
     try {
-      final response = await AnimeApi.getServers(animeId: widget.anime.id, episode: widget.episode, type: _streamType);
+      final response = await AnimeApi.getServers(animeId: widget.anime.id, episode: widget.episode, type: _streamType, source: widget.anime.source);
       final sources = _extractSources(response);
       if (sources.isEmpty) throw Exception('No playable servers were returned for this episode.');
       if (!mounted) return;
