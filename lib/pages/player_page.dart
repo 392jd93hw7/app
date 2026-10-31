@@ -114,10 +114,26 @@ class _PlayerPageState extends State<PlayerPage> {
         for (final item in node) { walk(item, name); }
       } else if (node is Map) {
         final label = (node['name'] ?? node['provider'] ?? node['server'] ?? node['source'] ?? name).toString();
-        final url = node['url'] ?? node['file'] ?? node['link'] ?? node['src'] ?? node['streamUrl'] ?? node['hlsProxyUrl'] ?? node['m3u8'] ?? node['mp4'] ?? node['hls'];
-        if (url is String && (url.startsWith('http://') || url.startsWith('https://')) && (url.contains('.m3u8') || url.contains('.mp4') || node['type'] == 'hls' || node['type'] == 'mp4' || node['isM3U8'] == true || node['playbackMode'] == 'hls')) {
-          found.add(_StreamSource(label, url));
-        } else {
+        // Try the backend proxy first, then retain the origin URL as a fallback.
+        final candidates = <String>[
+          for (final key in ['hlsProxyUrl', 'url', 'file', 'link', 'src', 'streamUrl', 'm3u8', 'mp4', 'hls'])
+            if (node[key] is String) (node[key] as String),
+        ];
+        var extracted = false;
+        for (final url in candidates) {
+          final isHttp = url.startsWith('http://') || url.startsWith('https://');
+          final isMedia = url.contains('.m3u8') || url.contains('.mp4') ||
+              node['type'] == 'hls' || node['type'] == 'mp4' ||
+              node['isM3U8'] == true || node['playbackMode'] == 'hls';
+          if (isHttp && isMedia) {
+            found.add(_StreamSource(
+              url == node['hlsProxyUrl'] ? '$label (Proxy)' : '$label (Direct)',
+              url,
+            ));
+            extracted = true;
+          }
+        }
+        if (!extracted) {
           for (final entry in node.entries) {
             if (entry.value is Map || entry.value is List) {
               walk(entry.value, entry.key.toString());
@@ -139,7 +155,12 @@ class _PlayerPageState extends State<PlayerPage> {
       if (!uri.hasScheme || !['http', 'https'].contains(uri.scheme)) {
         throw Exception('Invalid video URL');
       }
-      next = VideoPlayerController.networkUrl(uri, httpHeaders: const {'User-Agent': 'Mozilla/5.0 AniScroll'});
+      next = VideoPlayerController.networkUrl(uri, httpHeaders: const {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
+        'Referer': 'https://megaplay.buzz/',
+        'Origin': 'https://megaplay.buzz',
+        'Accept': '*/*',
+      });
       await next.initialize().timeout(const Duration(seconds: 35));
       await next.setLooping(false);
       await next.setPlaybackSpeed(_speed);
