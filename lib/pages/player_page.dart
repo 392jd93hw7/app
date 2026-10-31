@@ -33,7 +33,9 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _loadSources() async {
-    if (mounted) setState(() { _loading = true; _error = ''; });
+    if (mounted) {
+      setState(() { _loading = true; _error = ''; });
+    }
     try {
       final response = await AnimeApi.getServers(animeId: widget.anime.id, episode: widget.episode, type: _streamType, source: widget.anime.source);
       var sources = _extractSources(response);
@@ -48,8 +50,12 @@ class _PlayerPageState extends State<PlayerPage> {
         );
         sources = _extractSources(streamResponse);
       }
-      if (sources.isEmpty) throw Exception('The streaming API returned no M3U8 or MP4 URL. Check /api/servers and /api/watch on your server.');
-      if (!mounted) return;
+      if (sources.isEmpty) {
+        throw Exception('The streaming API returned no M3U8 or MP4 URL. Check /api/servers and /api/watch on your server.');
+      }
+      if (!mounted) {
+        return;
+      }
       setState(() => _sources = sources);
       Object? lastError;
       for (var i = 0; i < sources.length; i++) {
@@ -57,7 +63,9 @@ class _PlayerPageState extends State<PlayerPage> {
       }
       throw Exception(lastError ?? 'Every available server failed.');
     } catch (error) {
-      if (mounted) setState(() { _loading = false; _error = error.toString().replaceFirst('Exception: ', ''); });
+      if (mounted) {
+        setState(() { _loading = false; _error = error.toString().replaceFirst('Exception: ', ''); });
+      }
     }
   }
 
@@ -108,13 +116,17 @@ class _PlayerPageState extends State<PlayerPage> {
   void _scheduleHide() {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && (_controller?.value.isPlaying ?? false)) setState(() => _controlsVisible = false);
+      if (mounted && (_controller?.value.isPlaying ?? false)) {
+        setState(() => _controlsVisible = false);
+      }
     });
   }
 
   void _toggleControls() {
     setState(() => _controlsVisible = !_controlsVisible);
-    if (_controlsVisible) _scheduleHide();
+    if (_controlsVisible) {
+      _scheduleHide();
+    }
   }
 
   Future<void> _toggleFullscreen() async {
@@ -157,7 +169,9 @@ class _PlayerPageState extends State<PlayerPage> {
             tooltip: 'Change server', icon: const Icon(Icons.dns_outlined),
             onSelected: (index) async {
               setState(() => _loading = true);
-              try { await _playSource(index); } catch (error) { if (mounted) setState(() { _loading = false; _error = error.toString(); }); }
+              try { await _playSource(index); } catch (error) { if (mounted) {
+                setState(() { _loading = false; _error = error.toString(); });
+              } }
             },
             itemBuilder: (_) => _sources.asMap().entries.map((entry) => PopupMenuItem(
               value: entry.key,
@@ -170,7 +184,9 @@ class _PlayerPageState extends State<PlayerPage> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.closed_caption_outlined),
             onSelected: (value) {
-              if (value == 'toggle') setState(() => _subtitles = !_subtitles);
+              if (value == 'toggle') {
+                setState(() => _subtitles = !_subtitles);
+              }
               if (value == 'type') { setState(() => _streamType = _streamType == 'sub' ? 'dub' : 'sub'); _loadSources(); }
             },
             itemBuilder: (_) => [
