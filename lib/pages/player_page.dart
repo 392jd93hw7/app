@@ -113,21 +113,28 @@ class _PlayerPageState extends State<PlayerPage> {
         for (final item in node) { walk(item, name); }
       } else if (node is Map) {
         final label = (node['name'] ?? node['provider'] ?? node['server'] ?? node['source'] ?? name).toString();
-        // Try the backend proxy first, then retain the origin URL as a fallback.
-        final candidates = <String>[
-          for (final key in ['hlsProxyUrl', 'url', 'file', 'link', 'src', 'streamUrl', 'm3u8', 'mp4', 'hls'])
-            if (node[key] is String) (node[key] as String),
-        ];
+        // Prefer the backend HLS proxy. When the API supplies hlsProxyUrl,
+        // do not send the origin M3U8 URL to ExoPlayer.
+        final proxyUrl = node['hlsProxyUrl'];
+        final directUrl = node['m3u8'] ?? node['url'] ?? node['file'] ??
+            node['link'] ?? node['src'] ?? node['streamUrl'] ?? node['mp4'] ?? node['hls'];
+        final selectedUrl = proxyUrl is String && proxyUrl.isNotEmpty
+            ? proxyUrl
+            : directUrl;
         var extracted = false;
-        for (final url in candidates) {
-          final isHttp = url.startsWith('http://') || url.startsWith('https://');
-          final isMedia = url.contains('.m3u8') || url.contains('.mp4') ||
+        if (selectedUrl is String &&
+            (selectedUrl.startsWith('http://') || selectedUrl.startsWith('https://'))) {
+          final isMedia = selectedUrl.contains('.m3u8') ||
+              selectedUrl.contains('/api/proxy/hls') ||
+              selectedUrl.contains('.mp4') ||
               node['type'] == 'hls' || node['type'] == 'mp4' ||
               node['isM3U8'] == true || node['playbackMode'] == 'hls';
-          if (isHttp && isMedia) {
+          if (isMedia) {
             found.add(_StreamSource(
-              url == node['hlsProxyUrl'] ? '$serverName (Proxy)' : '$serverName (Direct)',
-              url,
+              proxyUrl is String && proxyUrl.isNotEmpty
+                  ? '$serverName (HLS Proxy)'
+                  : '$serverName (Direct fallback)',
+              selectedUrl,
               serverName,
             ));
             extracted = true;
