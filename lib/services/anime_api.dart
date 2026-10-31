@@ -154,10 +154,14 @@ class AnimeApi {
     throw ArgumentError('An AniList ID or MAL ID is required.');
   }
 
-  static Future<dynamic> getEpisodes({required String animeId, String source = 'anilist'}) async {
-    final malId = int.tryParse(animeId);
-    if (source == 'mal' && malId != null) {
-      return _request(Uri.parse('$_jikanUrl/anime/$malId/episodes?page=1'));
+  static Future<dynamic> getEpisodes({required String animeId, String source = 'anilist', String? malId}) async {
+    final resolvedMalId = int.tryParse(malId ?? (source == 'mal' ? animeId : ''));
+    if (resolvedMalId != null) {
+      try {
+        return await _request(Uri.parse('$_jikanUrl/anime/$resolvedMalId/episodes?page=1'));
+      } catch (_) {
+        // Jikan can be rate-limited; fall back to AniList's episode count.
+      }
     }
     // AniList does not publish episode titles. Return reliable episode numbers
     // from its metadata rather than inventing episode names or stream URLs.
