@@ -96,7 +96,9 @@ class _PlayerPageState extends State<PlayerPage> {
     VideoPlayerController? next;
     try {
       final uri = Uri.parse(source.url);
-      if (!uri.hasScheme || !['http', 'https'].contains(uri.scheme)) throw Exception('Invalid video URL');
+      if (!uri.hasScheme || !['http', 'https'].contains(uri.scheme)) {
+        throw Exception('Invalid video URL');
+      }
       next = VideoPlayerController.networkUrl(uri, httpHeaders: const {'User-Agent': 'Mozilla/5.0 AniScroll'});
       await next.initialize().timeout(const Duration(seconds: 35));
       await next.setLooping(false);
@@ -138,7 +140,9 @@ class _PlayerPageState extends State<PlayerPage> {
       await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     }
-    if (mounted) setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   String _time(Duration d) {
