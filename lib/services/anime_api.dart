@@ -26,12 +26,12 @@ class AnimeApi {
     nextAiringEpisode { airingAt episode }
   ''';
 
-  static Future<dynamic> _request(Uri uri, {String method = 'GET', Object? body}) async {
+  static Future<dynamic> _request(Uri uri, {String method = 'GET', Object? body, String accept = 'application/json'}) async {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
       final request = await (method == 'POST' ? client.postUrl(uri) : client.getUrl(uri))
           .timeout(const Duration(seconds: 15));
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+      request.headers.set(HttpHeaders.acceptHeader, accept);
       request.headers.set(HttpHeaders.userAgentHeader, 'AniScroll/1.0 (Flutter Android app)');
       if (body != null) {
         request.headers.contentType = ContentType.json;
@@ -141,7 +141,7 @@ class AnimeApi {
             startDate { year month day }
             endDate { year month day }
             studios(isMain: true) { nodes { name } }
-            relations { edges { relationTypeVersion node { id type title { userPreferred } } } }
+            relations { edges { relationType node { id type title { userPreferred } } } }
             recommendations(perPage: 10, sort: RATING_DESC) { nodes { mediaRecommendation { id title { userPreferred } coverImage { large } averageScore } } }
           }
         }
@@ -154,21 +154,124 @@ class AnimeApi {
     throw ArgumentError('An AniList ID or MAL ID is required.');
   }
 
+  static const _kitsuUrl = 'https://kitsu.io/api/edge';
+
+  static Future<List<dynamic>> _getKitsuEpisodes(String anilistId) async {
+    // Kitsu exposes cross-service mappings. Resolve the Kitsu anime ID using
+    // AniList's ID rather than relying on a title search that can mis-match sequels.
+    final mappingUri = Uri.https('kitsu.io', '/api/edge/mappings', {
+      'filter[externalSite]': 'anilist/anime',
+      'filter[externalId]': anilistId,
+      'include': 'item',
+    });
+    final mapping = await _request(
+      mappingUri,
+      accept: 'application/vnd.api+json',
+    );
+    final mappings = mapping is Map && mapping['data'] is List
+        ? mapping['data'] as List
+        : const [];
+    if (mappings.isEmpty) return const [];
+    final first = mappings.first;
+    final kitsuId = first is Map
+        ? first['relationships'] is Map
+            ? (first['relationships']['item'] is Map
+                ? first['relationships']['item']['data'] is Map
+                    ? first['relationships']['item']['data']['id']?.toString()
+                    : null
+                : null)
+            : null
+        : null;
+    if (kitsuId == null || kitsuId.isEmpty) return const [];
+
+    final episodes = <dynamic>[];
+    const pageSize = 20;
+    for (var offset = 0; offset < 500; offset += pageSize) {
+      final uri = Uri.https('kitsu.io', '/api/edge/anime/$kitsuId/episodes', {
+        'page[limit]': '$pageSize',
+        'page[offset]': '$offset',
+        'sort': 'number',
+      });
+      final response = await _request(uri, accept: 'application/vnd.api+json');
+      final page = response is Map && response['data'] is List
+          ? response['data'] as List
+          : const [];
+      if (page.isEmpty) break;
+      for (final raw in page) {
+        if (raw is! Map) continue;
+        final attributes = raw['attributes'];
+        if (attributes is! Map) continue;
+        final thumbnail = attributes['thumbnail'];
+        final thumbnailUrl = thumbnail is Map
+            ? (thumbnail['original'] ?? thumbnail['large'] ?? thumbnail['small'])
+            : thumbnail;
+        episodes.add({
+          'number': attributes['number'],
+          'title': attributes['canonicalTitle'] ??
+              attributes['titles'] is Map
+                  ? (attributes['canonicalTitle'] ??
+                      (attributes['titles'] as Map)['en_us'] ??
+                      (attributes['titles'] as Map)['en_jp'])
+                  : attributes['canonicalTitle'],
+          'description': attributes['synopsis'] ?? attributes['description'] ?? '',
+          'thumbnail': thumbnailUrl ?? '',
+        });
+      }
+      if (page.length < pageSize) break;
+    }
+    return episodes;
+  }
+
   static Future<dynamic> getEpisodes({required String animeId, String source = 'anilist', String? malId}) async {
-    final resolvedMalId = int.tryParse(malId ?? (source == 'mal' ? animeId : ''));
-    if (resolvedMalId != null) {
-      try {
-        return await _request(Uri.parse('$_jikanUrl/anime/$resolvedMalId/episodes?page=1'));
-      } catch (_) {
-        // Jikan can be rate-limited; fall back to AniList's episode count.
+    final id = int.tryParse(animeId);
+    if (id == null) {
+      throw ArgumentError('A numeric AniList ID is required to load the episode list.');
+    }
+
+    // AniList is the source of truth for the episode count/number sequence.
+    // Kitsu enriches those numbered episodes with titles, thumbnails and synopsis.
+    final data = await _aniList('''
+      query (\$id: Int) {
+        Media(id: \$id, type: ANIME) {
+          id
+          episodes
+        }
+      }
+    ''', {'id': id});
+    final media = data is Map ? data['Media'] : null;
+    final count = media is Map ? int.tryParse('${media['episodes'] ?? ''}') : null;
+    if (count == null || count < 1 || count > 500) {
+      throw Exception('AniList did not return a valid episode count for this anime.');
+    }
+
+    List<dynamic> kitsuEpisodes = const [];
+    try {
+      kitsuEpisodes = await _getKitsuEpisodes('$id');
+    } catch (_) {
+      // Keep the AniList episode list usable when Kitsu has no mapping or is down.
+    }
+    final byNumber = <int, Map<String, dynamic>>{};
+    for (final item in kitsuEpisodes) {
+      if (item is Map) {
+        final number = int.tryParse('${item['number'] ?? ''}');
+        if (number != null) {
+          byNumber.putIfAbsent(number, () => Map<String, dynamic>.from(item));
+        }
       }
     }
-    // AniList does not publish episode titles. Return reliable episode numbers
-    // from its metadata rather than inventing episode names or stream URLs.
-    final info = await getInfo(anilistId: animeId);
-    final count = info is Map ? int.tryParse('${info['episodes'] ?? ''}') : null;
-    return {'data': List.generate(count != null && count > 0 && count <= 300 ? count : 0,
-      (i) => {'number': i + 1, 'title': 'Episode ${i + 1}'})};
+    return {
+      'data': List.generate(count, (index) {
+        final number = index + 1;
+        final kitsu = byNumber[number] ?? const <String, dynamic>{};
+        final title = (kitsu['title'] ?? '').toString().trim();
+        return {
+          'number': number,
+          'title': title.isEmpty ? 'Episode $number' : title,
+          'description': kitsu['description'] ?? '',
+          'thumbnail': kitsu['thumbnail'] ?? '',
+        };
+      }),
+    };
   }
 
   // Streaming is resolved through the user's configured AniScroll API server.
