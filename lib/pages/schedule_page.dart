@@ -116,7 +116,7 @@ class _SchedulePageState extends State<SchedulePage> {
           return ListView.separated(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
             itemCount: airing.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (context, i) {
               final item = airing[i] as Map;
               final stamp = int.tryParse('${item['airingAt']}') ?? 0;
