@@ -36,8 +36,19 @@ class _PlayerPageState extends State<PlayerPage> {
     if (mounted) setState(() { _loading = true; _error = ''; });
     try {
       final response = await AnimeApi.getServers(animeId: widget.anime.id, episode: widget.episode, type: _streamType, source: widget.anime.source);
-      final sources = _extractSources(response);
-      if (sources.isEmpty) throw Exception('No playable servers were returned for this episode.');
+      var sources = _extractSources(response);
+      // The servers endpoint may return provider names/IDs rather than direct
+      // media URLs. Resolve through the documented watch endpoint as fallback.
+      if (sources.isEmpty) {
+        final streamResponse = await AnimeApi.watch(
+          source: widget.anime.source,
+          animeId: widget.anime.id,
+          episode: widget.episode,
+          type: _streamType,
+        );
+        sources = _extractSources(streamResponse);
+      }
+      if (sources.isEmpty) throw Exception('The streaming API returned no M3U8 or MP4 URL. Check /api/servers and /api/watch on your server.');
       if (!mounted) return;
       setState(() => _sources = sources);
       Object? lastError;
@@ -57,8 +68,8 @@ class _PlayerPageState extends State<PlayerPage> {
         for (final item in node) { walk(item, name); }
       } else if (node is Map) {
         final label = (node['name'] ?? node['provider'] ?? node['server'] ?? node['source'] ?? name).toString();
-        final url = node['url'] ?? node['file'] ?? node['link'] ?? node['src'] ?? node['streamUrl'];
-        if (url is String && (url.startsWith('http://') || url.startsWith('https://'))) {
+        final url = node['url'] ?? node['file'] ?? node['link'] ?? node['src'] ?? node['streamUrl'] ?? node['m3u8'] ?? node['mp4'] ?? node['hls'];
+        if (url is String && (url.startsWith('http://') || url.startsWith('https://')) && (url.contains('.m3u8') || url.contains('.mp4') || node['type'] == 'hls' || node['type'] == 'mp4' || node['isM3U8'] == true)) {
           found.add(_StreamSource(label, url));
         } else {
           for (final entry in node.entries) {
