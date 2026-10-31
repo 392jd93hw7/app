@@ -176,16 +176,44 @@ class AnimeApi {
 
   static Future<dynamic> _streamRequest(String path) => _request(Uri.parse('$streamingBaseUrl$path'));
 
-  static Future<dynamic> getServers({required String animeId, required int episode, required String type, String source = 'anilist'}) {
-    final query = Uri(queryParameters: {
-      'id': animeId, 'anilistId': animeId, 'ep': '$episode',
-      'type': type, 'source': source,
-    }).query;
-    return _streamRequest('/api/servers?$query');
+  static Future<dynamic> getServers({
+    required String animeId,
+    String? malId,
+    required int episode,
+    required String type,
+    String source = 'anikoto',
+  }) {
+    final id = int.tryParse(animeId);
+    final mal = int.tryParse(malId ?? '');
+    final queryParameters = <String, String>{
+      if (id != null) 'anilistId': '$id',
+      if (id == null && mal != null) 'malId': '$mal',
+      'ep': '$episode',
+      'type': type,
+      'source': source,
+    };
+    if (id == null && mal == null) {
+      throw ArgumentError('A numeric AniList ID or MAL ID is required for streaming.');
+    }
+    return _streamRequest('/api/servers?${Uri(queryParameters: queryParameters).query}');
   }
 
-  static Future<dynamic> watch({required String source, required String animeId, required int episode, required String type}) =>
-      _streamRequest('/api/watch/${Uri.encodeComponent(source)}/${Uri.encodeComponent(animeId)}/$episode/${Uri.encodeComponent(type)}');
+  static Future<dynamic> watch({
+    required String source,
+    required String animeId,
+    String? malId,
+    required int episode,
+    required String type,
+    String? server,
+  }) {
+    final id = int.tryParse(animeId);
+    final pathId = id != null ? '$id' : 'mal-${Uri.encodeComponent(malId ?? '')}';
+    final uri = Uri(
+      path: '/api/watch/${Uri.encodeComponent(source)}/$pathId/$episode/${Uri.encodeComponent(type)}',
+      queryParameters: server == null ? null : {'server': server},
+    );
+    return _streamRequest(uri.toString());
+  }
 
   static Future<dynamic> health() async {
     final results = <String, dynamic>{};
