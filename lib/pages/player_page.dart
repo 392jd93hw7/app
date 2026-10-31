@@ -17,271 +17,229 @@ class PlayerPage extends StatefulWidget {
 
 class _PlayerPageState extends State<PlayerPage> {
   VideoPlayerController? _controller;
-  List<_StreamSource> _sources = [];
-  int _selectedSource = 0;
-  bool _loading = true, _controlsVisible = true, _fullscreen = false;
-  bool _subtitles = true;
-  String _error = '', _streamType = 'sub';
+  List<String> _servers = [];
+  final List<String> _failures = [];
+  int _selected = -1, _generation = 0;
+  bool _loading = true, _controls = true, _fullscreen = false, _switching = false, _captions = true;
+  String _type = 'sub', _status = 'Finding servers…';
+  String? _error, _currentServer;
   double _speed = 1;
   Timer? _hideTimer;
-  bool _autoFallbackInProgress = false;
-  final List<String> _serverFailures = <String>[];
+
+  static const _headers = <String, String>{
+    'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
+    'Referer': 'https://megaplay.buzz/',
+    'Origin': 'https://megaplay.buzz',
+    'Accept': '*/*',
+  };
 
   @override
   void initState() {
     super.initState();
     WakelockPlus.enable();
-    _loadSources();
+    _loadServers();
   }
 
-  Future<void> _loadSources() async {
-    if (mounted) {
-      setState(() { _loading = true; _error = ''; });
-    }
+  Future<void> _loadServers({int start = 0}) async {
+    final generation = ++_generation;
+    _failures.clear();
+    setState(() {
+      _loading = true;
+      _error = null;
+      _status = 'Finding $_type servers…';
+      _servers = [];
+      _selected = -1;
+    });
     try {
-      // "anilist" is the metadata source, not a streaming provider.
-      // The streaming API expects a provider such as anikoto or animeheaven.
-      final response = await AnimeApi.getServers(
+      final result = await AnimeApi.getServers(
         animeId: widget.anime.id,
         malId: widget.anime.malId,
         episode: widget.episode,
-        type: _streamType,
+        type: _type,
         source: 'anikoto',
       );
-
-      final servers = response is Map && response['servers'] is List
-          ? response['servers'] as List
-          : const [];
-      final sources = <_StreamSource>[];
-
-      // /api/servers returns sourceId values, not playable URLs. Resolve each
-      // server by name through /api/watch/{source}/{id}/{ep}/{type}?server=...
-      for (final item in servers) {
-        if (item is! Map) {
-          continue;
-        }
-        final serverName = (item['name'] ?? '').toString();
-        if (serverName.isEmpty) {
-          continue;
-        }
-        try {
-          final streamResponse = await AnimeApi.watch(
-            source: 'anikoto',
-            animeId: widget.anime.id,
-            malId: widget.anime.malId,
-            episode: widget.episode,
-            type: _streamType,
-            server: serverName,
-          );
-          final resolved = _extractSources(streamResponse, serverName);
-          sources.addAll(resolved);
-        } catch (_) {
-          // Try the next available server if this provider fails.
+      if (!mounted || generation != _generation) return;
+      final list = result is Map && result['servers'] is List ? result['servers'] as List : const [];
+      final names = <String>[];
+      for (final item in list) {
+        if (item is Map) {
+          final name = (item['name'] ?? '').toString().trim();
+          if (name.isNotEmpty && !names.contains(name)) names.add(name);
         }
       }
-
-      final uniqueUrls = <String>{};
-      final playable = sources.where((source) => uniqueUrls.add(source.url)).toList();
-      if (playable.isEmpty) {
-        throw Exception('No playable stream was returned. The server list loaded, but every /api/watch request failed or returned no M3U8/MP4 URL.');
-      }
-      if (!mounted) {
-        return;
-      }
-      setState(() => _sources = playable);
-      _serverFailures.clear();
-      final started = await _tryServersFrom(0);
-      if (started) {
-        return;
-      }
-      const lastError = 'Every available server failed to start playback.';
-      throw Exception(lastError ?? 'Every available server failed.');
-    } catch (error) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = error.toString().replaceFirst('Exception: ', '');
-        });
+      if (names.isEmpty) throw Exception('The API returned no streaming servers.');
+      setState(() => _servers = names);
+      await _tryFrom(start, generation);
+    } catch (e) {
+      if (mounted && generation == _generation) {
+        setState(() { _loading = false; _error = _message(e); });
       }
     }
   }
 
-  List<_StreamSource> _extractSources(dynamic value, String serverName) {
-    final found = <_StreamSource>[];
-
-    void walk(dynamic node) {
-      if (node is List) {
-        for (final item in node) {
-          walk(item);
+  String? _proxyFrom(dynamic value) {
+    if (value is List) {
+      for (final item in value) {
+        final url = _proxyFrom(item);
+        if (url != null) return url;
+      }
+    } else if (value is Map) {
+      final raw = value['hlsProxyUrl'];
+      if (raw is String && raw.trim().isNotEmpty) {
+        final uri = Uri.tryParse(raw.trim());
+        if (uri != null && (uri.scheme == 'http' || uri.scheme == 'https') && uri.host.isNotEmpty) {
+          return raw.trim();
         }
-      } else if (node is Map) {
-        // Only accept the backend's HLS proxy URL. Never pass the origin
-        // M3U8 URL directly to ExoPlayer; a failed proxy means try another server.
-        final proxyUrl = node['hlsProxyUrl'];
-        if (proxyUrl is String &&
-            proxyUrl.isNotEmpty &&
-            (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://'))) {
-          found.add(_StreamSource('$serverName (HLS Proxy)', proxyUrl, serverName));
-          return;
-        }
-        for (final entry in node.entries) {
-          if (entry.value is Map || entry.value is List) {
-            walk(entry.value);
-          }
+      }
+      for (final child in value.values) {
+        if (child is Map || child is List) {
+          final url = _proxyFrom(child);
+          if (url != null) return url;
         }
       }
     }
-
-    walk(value);
-    final unique = <String>{};
-    return found.where((source) => unique.add(source.url)).toList();
+    return null;
   }
 
-  Future<bool> _tryServersFrom(int startIndex) async {
-    Object? lastError;
-    final attemptedServers = <String>{};
-    for (var i = startIndex; i < _sources.length; i++) {
-      final serverName = _sources[i].serverName;
-      if (!attemptedServers.add(serverName)) {
-        continue;
-      }
+  Future<bool> _tryFrom(int start, int generation) async {
+    for (var i = start; i < _servers.length; i++) {
+      if (!mounted || generation != _generation) return false;
+      final server = _servers[i];
+      setState(() { _loading = true; _error = null; _status = 'Resolving $server HLS proxy…'; });
       try {
-        await _playSource(i);
+        final response = await AnimeApi.watch(
+          source: 'anikoto',
+          animeId: widget.anime.id,
+          malId: widget.anime.malId,
+          episode: widget.episode,
+          type: _type,
+          server: server,
+        );
+        if (!mounted || generation != _generation) return false;
+        final proxy = _proxyFrom(response);
+        if (proxy == null) throw Exception('Server did not return hlsProxyUrl.');
+        setState(() => _status = 'Opening $server…');
+        await _start(proxy, server, i, generation);
         return true;
-      } catch (error) {
-        lastError = error;
-        final detail = '$serverName: ${error.toString()}';
-        _serverFailures.add(detail);
-        debugPrint('AniScroll playback fallback failed: $detail');
+      } catch (e) {
+        final detail = '$server: ${_message(e)}';
+        _failures.add(detail);
+        debugPrint('AniScroll player: $detail');
       }
     }
-    if (mounted) {
+    if (mounted && generation == _generation) {
       setState(() {
         _loading = false;
-        _error = [
-          'Could not play any available server.',
-          if (_serverFailures.isNotEmpty) ..._serverFailures,
-          if (_serverFailures.isEmpty && lastError != null) lastError.toString(),
-          if (_serverFailures.isEmpty && lastError == null) 'No other streaming servers are available.',
-        ].join('\\n\\n');
+        _error = ['All streaming servers failed.', ..._failures, 'Direct M3U8 fallback is disabled.'].join('\n\n');
       });
     }
     return false;
   }
 
-  void _handlePlaybackUpdate(VideoPlayerController controller, int index) {
-    if (!mounted ||
-        !identical(_controller, controller) ||
-        !controller.value.hasError ||
-        _autoFallbackInProgress) {
-      return;
-    }
-    _autoFallbackInProgress = true;
-    final failedServer = _sources[index].serverName;
-    // Start at the next different server, skipping alternate URLs from the
-    // failed server (for example HD-1 Direct after HD-1 Proxy).
-    var nextIndex = index + 1;
-    while (nextIndex < _sources.length &&
-        _sources[nextIndex].serverName == failedServer) {
-      nextIndex++;
-    }
-    if (nextIndex >= _sources.length) {
-      nextIndex = 0;
-      while (nextIndex < _sources.length &&
-          _sources[nextIndex].serverName == failedServer) {
-        nextIndex++;
-      }
-    }
-    if (mounted) {
-      setState(() {
-        _loading = true;
-        _error = 'Server $failedServer failed. Trying another server…';
-      });
-    }
-    Future<void>(() async {
-      final started = nextIndex < _sources.length
-          ? await _tryServersFrom(nextIndex)
-          : false;
-      if (!started && mounted) {
-        setState(() {
-          _loading = false;
-          _error = 'Playback failed on $failedServer and no fallback server worked.';
-        });
-      }
-      _autoFallbackInProgress = false;
-    });
-  }
-
-  Future<void> _playSource(int index) async {
-    final source = _sources[index];
+  Future<void> _start(String url, String server, int index, int generation) async {
     VideoPlayerController? next;
     try {
-      final uri = Uri.parse(source.url);
-      if (!uri.hasScheme || !['http', 'https'].contains(uri.scheme)) {
-        throw Exception('Invalid video URL');
-      }
-      next = VideoPlayerController.networkUrl(uri, httpHeaders: const {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Referer': 'https://megaplay.buzz/',
-        'Origin': 'https://megaplay.buzz',
-        'Accept': '*/*',
-      });
-      await next.initialize().timeout(const Duration(seconds: 35));
-      await next.setLooping(false);
-      await next.setPlaybackSpeed(_speed);
-      if (!mounted) {
+      next = VideoPlayerController.networkUrl(
+        Uri.parse(url),
+        httpHeaders: _headers,
+        formatHint: VideoFormat.hls,
+      );
+      await next.initialize().timeout(const Duration(seconds: 40));
+      if (!mounted || generation != _generation) {
         await next.dispose();
         return;
       }
+      await next.setLooping(false);
+      await next.setPlaybackSpeed(_speed);
       final previous = _controller;
-      setState(() { _controller = next; _selectedSource = index; _loading = false; _error = ''; });
-      next.addListener(() => _handlePlaybackUpdate(next!, index));
+      setState(() {
+        _controller = next;
+        _selected = index;
+        _currentServer = server;
+        _loading = false;
+        _error = null;
+        _status = 'Playing';
+      });
+      next.addListener(() => _onVideoUpdate(next!, generation));
       await next.play();
       await previous?.dispose();
       _scheduleHide();
-    } catch (_) {
+    } catch (e) {
       await next?.dispose();
       rethrow;
     }
   }
 
+  void _onVideoUpdate(VideoPlayerController controller, int generation) {
+    if (!mounted || generation != _generation || !identical(controller, _controller) ||
+        !controller.value.hasError || _switching) return;
+    _switching = true;
+    final nextIndex = _selected + 1;
+    setState(() { _loading = true; _status = '$_currentServer failed. Trying next server…'; });
+    unawaited(() async {
+      await controller.dispose();
+      if (mounted && identical(_controller, controller)) setState(() => _controller = null);
+      await _tryFrom(nextIndex, generation);
+      _switching = false;
+    }());
+  }
+
+  Future<void> _chooseServer(int index) async {
+    if (index < 0 || index >= _servers.length) return;
+    final generation = ++_generation;
+    final old = _controller;
+    setState(() { _loading = true; _error = null; _status = 'Switching to ${_servers[index]}…'; });
+    await old?.pause();
+    await old?.dispose();
+    if (mounted) setState(() => _controller = null);
+    await _tryFrom(index, generation);
+  }
+
+  Future<void> _switchType() async {
+    _type = _type == 'sub' ? 'dub' : 'sub';
+    final old = _controller;
+    _controller = null;
+    await old?.dispose();
+    if (mounted) await _loadServers();
+  }
+
+  String _message(Object error) {
+    if (error is TimeoutException) return 'Request timed out.';
+    if (error is PlatformException) return error.message ?? 'Android could not read this HLS stream.';
+    return error.toString().replaceFirst('Exception: ', '');
+  }
+
   void _scheduleHide() {
     _hideTimer?.cancel();
     _hideTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && (_controller?.value.isPlaying ?? false)) {
-        setState(() => _controlsVisible = false);
-      }
+      if (mounted && (_controller?.value.isPlaying ?? false)) setState(() => _controls = false);
     });
   }
 
   void _toggleControls() {
-    setState(() => _controlsVisible = !_controlsVisible);
-    if (_controlsVisible) {
-      _scheduleHide();
-    }
+    setState(() => _controls = !_controls);
+    if (_controls) _scheduleHide();
   }
 
   Future<void> _toggleFullscreen() async {
-    _fullscreen = !_fullscreen;
-    if (_fullscreen) {
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-      await SystemChrome.setPreferredOrientations([DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
-    } else {
-      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    }
-    if (mounted) {
-      setState(() {});
-    }
+    final value = !_fullscreen;
+    await SystemChrome.setEnabledSystemUIMode(value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge);
+    await SystemChrome.setPreferredOrientations(value
+        ? [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+        : [DeviceOrientation.portraitUp]);
+    if (mounted) setState(() => _fullscreen = value);
   }
 
   String _time(Duration d) {
     String two(int n) => n.toString().padLeft(2, '0');
-    return d.inHours > 0 ? '${d.inHours}:${two(d.inMinutes.remainder(60))}:${two(d.inSeconds.remainder(60))}' : '${two(d.inMinutes)}:${two(d.inSeconds.remainder(60))}';
+    return d.inHours > 0
+        ? '${d.inHours}:${two(d.inMinutes.remainder(60))}:${two(d.inSeconds.remainder(60))}'
+        : '${two(d.inMinutes)}:${two(d.inSeconds.remainder(60))}';
   }
 
   @override
   void dispose() {
+    _generation++;
     _hideTimer?.cancel();
     _controller?.dispose();
     WakelockPlus.disable();
@@ -293,133 +251,129 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   Widget build(BuildContext context) {
     final video = _controller;
+    final ready = video?.value.isInitialized ?? false;
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: _fullscreen ? null : AppBar(
         backgroundColor: Colors.black,
         title: Text(widget.anime.title, maxLines: 1, overflow: TextOverflow.ellipsis),
         actions: [
-          if (_sources.isNotEmpty) PopupMenuButton<int>(
-            tooltip: 'Change server', icon: const Icon(Icons.dns_outlined),
-            onSelected: (index) async {
-              setState(() => _loading = true);
-              try { await _playSource(index); } catch (_) {
-                await _tryServersFrom(index + 1);
-              }
-            },
-            itemBuilder: (_) => _sources.asMap().entries.map((entry) => PopupMenuItem(
-              value: entry.key,
-              child: Row(children: [
-                if (entry.key == _selectedSource) const Icon(Icons.check, color: appPurple, size: 18),
-                const SizedBox(width: 8), Text(entry.value.name),
-              ]),
-            )).toList(),
+          if (_servers.isNotEmpty) PopupMenuButton<int>(
+            tooltip: 'Change server',
+            icon: const Icon(Icons.dns_outlined),
+            onSelected: _chooseServer,
+            itemBuilder: (_) => [
+              for (var i = 0; i < _servers.length; i++)
+                PopupMenuItem(value: i, child: Row(children: [
+                  if (i == _selected) const Icon(Icons.check, color: appPurple, size: 18),
+                  const SizedBox(width: 8), Text(_servers[i]),
+                ])),
+            ],
           ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.closed_caption_outlined),
-            onSelected: (value) {
-              if (value == 'toggle') {
-                setState(() => _subtitles = !_subtitles);
-              }
-              if (value == 'type') { setState(() => _streamType = _streamType == 'sub' ? 'dub' : 'sub'); _loadSources(); }
+            onSelected: (v) {
+              if (v == 'audio') _switchType();
+              if (v == 'captions') setState(() => _captions = !_captions);
             },
             itemBuilder: (_) => [
-              PopupMenuItem(value: 'toggle', child: Text(_subtitles ? 'Subtitle preference: on' : 'Subtitle preference: off')),
-              PopupMenuItem(value: 'type', child: Text(_streamType == 'sub' ? 'Switch to dub servers' : 'Switch to sub servers')),
+              PopupMenuItem(value: 'captions', child: Text(_captions ? 'Subtitle preference: on' : 'Subtitle preference: off')),
+              PopupMenuItem(value: 'audio', child: Text(_type == 'sub' ? 'Switch to dub' : 'Switch to sub')),
             ],
           ),
         ],
       ),
       body: SafeArea(child: Column(children: [
         Expanded(child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
           onTap: _toggleControls,
           child: Stack(alignment: Alignment.center, children: [
-            if (video != null && video.value.isInitialized)
-              Center(child: AspectRatio(aspectRatio: video.value.aspectRatio, child: VideoPlayer(video)))
+            if (ready)
+              Center(child: AspectRatio(aspectRatio: video!.value.aspectRatio, child: VideoPlayer(video)))
             else
               const Center(child: Icon(Icons.play_circle_outline, color: Colors.white24, size: 76)),
-            if (_loading) const CircularProgressIndicator(color: appPurple),
-            if (_error.isNotEmpty && !_loading) Padding(
+            if (_loading) Column(mainAxisSize: MainAxisSize.min, children: [
+              const CircularProgressIndicator(color: appPurple),
+              const SizedBox(height: 14),
+              Text(_status, style: const TextStyle(color: Colors.white70)),
+            ]),
+            if (_error != null && !_loading) Padding(
               padding: const EdgeInsets.all(24),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.error_outline, color: Colors.redAccent, size: 38),
+                const Icon(Icons.error_outline, color: Colors.redAccent, size: 40),
                 const SizedBox(height: 12),
-                Text(_error, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
-                const SizedBox(height: 16),
-                FilledButton.icon(onPressed: _loadSources, icon: const Icon(Icons.refresh), label: const Text('Retry servers')),
+                const Text('Playback unavailable', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 10),
+                Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+                const SizedBox(height: 18),
+                FilledButton.icon(onPressed: _loadServers, icon: const Icon(Icons.refresh), label: const Text('Retry servers')),
               ]),
             ),
-            if (_controlsVisible && video != null && video.value.isInitialized && !_loading) _buildControls(video),
+            if (_controls && ready && !_loading) _buildControls(video!),
           ]),
         )),
-        if (!_fullscreen) _buildEpisodeFooter(),
+        if (!_fullscreen) _buildFooter(),
       ])),
     );
   }
 
   Widget _buildControls(VideoPlayerController video) {
-    final value = video.value;
-    return Container(
-      color: Colors.black.withValues(alpha: .38),
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+    final v = video.value;
+    return Positioned.fill(child: Container(
+      color: Colors.black.withValues(alpha: 0.28),
+      padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
       child: Column(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
         Row(children: [
           Text('EP ${widget.episode}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           const Spacer(),
           PopupMenuButton<double>(
-            initialValue: _speed, color: const Color(0xFF202033),
-            onSelected: (speed) { setState(() => _speed = speed); video.setPlaybackSpeed(speed); },
+            initialValue: _speed,
+            color: const Color(0xFF202033),
+            onSelected: (s) { setState(() => _speed = s); video.setPlaybackSpeed(s); },
             itemBuilder: (_) => [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
-                .map((speed) => PopupMenuItem<double>(
-                      value: speed,
-                      child: Text(
-                        '${speed}x',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                    ))
-                .toList(),
+                .map((s) => PopupMenuItem(value: s, child: Text('${s}x', style: const TextStyle(color: Colors.white)))).toList(),
             child: Text('${_speed}x', style: const TextStyle(color: Colors.white)),
           ),
         ]),
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          IconButton(onPressed: () => video.seekTo(value.position - const Duration(seconds: 10)), icon: const Icon(Icons.replay_10, color: Colors.white, size: 34)),
+          IconButton(onPressed: () => video.seekTo(v.position - const Duration(seconds: 10)), icon: const Icon(Icons.replay_10, color: Colors.white, size: 34)),
           const SizedBox(width: 24),
-          IconButton(onPressed: () => value.isPlaying ? video.pause() : video.play(), iconSize: 58, icon: Icon(value.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.white)),
+          IconButton(onPressed: () => v.isPlaying ? video.pause() : video.play(), iconSize: 58,
+            icon: Icon(v.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.white)),
           const SizedBox(width: 24),
-          IconButton(onPressed: () => video.seekTo(value.position + const Duration(seconds: 10)), icon: const Icon(Icons.forward_10, color: Colors.white, size: 34)),
+          IconButton(onPressed: () => video.seekTo(v.position + const Duration(seconds: 10)), icon: const Icon(Icons.forward_10, color: Colors.white, size: 34)),
         ]),
         Column(children: [
-          VideoProgressIndicator(video, allowScrubbing: true, padding: const EdgeInsets.symmetric(vertical: 8), colors: const VideoProgressColors(playedColor: appPurple, bufferedColor: Colors.white38, backgroundColor: Colors.white12)),
+          VideoProgressIndicator(video, allowScrubbing: true, padding: const EdgeInsets.symmetric(vertical: 8),
+            colors: const VideoProgressColors(playedColor: appPurple, bufferedColor: Colors.white38, backgroundColor: Colors.white12)),
           Row(children: [
-            Text(_time(value.position), style: const TextStyle(color: Colors.white, fontSize: 11)),
+            Text(_time(v.position), style: const TextStyle(color: Colors.white, fontSize: 11)),
             const Spacer(),
-            Text(_time(value.duration), style: const TextStyle(color: Colors.white, fontSize: 11)),
+            Text(_time(v.duration), style: const TextStyle(color: Colors.white, fontSize: 11)),
             IconButton(onPressed: _toggleFullscreen, icon: Icon(_fullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.white)),
           ]),
         ]),
       ]),
-    );
+    ));
   }
 
-  Widget _buildEpisodeFooter() => Container(
-    width: double.infinity, padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
+  Widget _buildFooter() => Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
     color: const Color(0xFF10111C),
     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(widget.anime.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
       const SizedBox(height: 4),
-      Text('Episode ${widget.episode} • ${_sources.isEmpty ? 'Finding servers…' : _sources[_selectedSource].name}', style: const TextStyle(color: appMuted)),
+      Text('Episode ${widget.episode} • ${_currentServer ?? (_loading ? 'Finding servers…' : 'No server selected')}',
+        style: const TextStyle(color: appMuted)),
       const SizedBox(height: 12),
       Row(children: [
         const Icon(Icons.subtitles_outlined, color: appPurple, size: 18),
         const SizedBox(width: 8),
-        Expanded(child: Text(_subtitles ? 'Subtitle preference: English (if provided by stream)' : 'Subtitle preference: off', style: const TextStyle(color: appMuted, fontSize: 12))),
-        TextButton(onPressed: () { setState(() => _streamType = _streamType == 'sub' ? 'dub' : 'sub'); _loadSources(); }, child: Text(_streamType.toUpperCase())),
+        Expanded(child: Text(_captions ? 'Subtitle preference: on (if included in stream)' : 'Subtitle preference: off',
+          style: const TextStyle(color: appMuted, fontSize: 12))),
+        TextButton(onPressed: _switchType, child: Text(_type.toUpperCase())),
       ]),
     ]),
   );
-}
-
-class _StreamSource {
-  const _StreamSource(this.name, this.url, this.serverName);
-  final String name, url, serverName;
 }
