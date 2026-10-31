@@ -30,7 +30,9 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
 
   List<dynamic> _episodeList(dynamic data) => AnimeApi.extractList(data);
   int _episodeNumber(dynamic item, int fallback) {
-    if (item is Map) return int.tryParse((item['number'] ?? item['episode'] ?? item['ep'] ?? item['episodeNumber'] ?? fallback).toString()) ?? fallback;
+    if (item is Map) {
+      return int.tryParse((item['number'] ?? item['episode'] ?? item['ep'] ?? item['episodeNumber'] ?? fallback).toString()) ?? fallback;
+    }
     return fallback;
   }
 
@@ -51,8 +53,12 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
       SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.all(18), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         SizedBox(width: double.infinity, child: FilledButton.icon(onPressed: () => widget.onPlay(1), icon: const Icon(Icons.play_arrow), label: const Text('Watch episode 1'))),
         FutureBuilder<dynamic>(future: _info, builder: (context, snapshot) {
-          if (snapshot.hasError) return const Text('Additional metadata is unavailable.', style: TextStyle(color: appMuted));
-          if (snapshot.connectionState == ConnectionState.waiting) return const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator(color: appPurple));
+          if (snapshot.hasError) {
+            return const Text('Additional metadata is unavailable.', style: TextStyle(color: appMuted));
+          }
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: LinearProgressIndicator(color: appPurple));
+          }
           return const SizedBox.shrink();
         }),
         const SizedBox(height: 16),
@@ -63,12 +69,18 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
         const SizedBox(height: 16),
         const Text('Episodes', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         FutureBuilder<dynamic>(future: _episodes, builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(color: appPurple)));
-          if (snapshot.hasError) return Text('Could not load episode list: ${snapshot.error}', style: const TextStyle(color: appMuted));
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(color: appPurple)));
+          }
+          if (snapshot.hasError) {
+            return Text('Could not load episode list: ${snapshot.error}', style: const TextStyle(color: appMuted));
+          }
           final episodes = _episodeList(snapshot.data);
           if (episodes.isEmpty) {
             final count = widget.anime.episodeCount;
-            if (count == null || count < 1) return const Text('No episode list was returned by the API.', style: TextStyle(color: appMuted));
+            if (count == null || count < 1) {
+              return const Text('No episode list was returned by the API.', style: TextStyle(color: appMuted));
+            }
             return Column(children: List.generate(count, (i) => _episodeTile(i + 1, 'Episode ${i + 1}', '')));
           }
           return Column(children: episodes.asMap().entries.map((entry) {
