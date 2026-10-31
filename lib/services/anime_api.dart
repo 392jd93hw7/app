@@ -80,9 +80,9 @@ class AnimeApi {
 
   static Future<List<Anime>> search(String query) async {
     final data = await _aniList('''
-      query ($search: String) {
+      query (\$search: String) {
         Page(page: 1, perPage: 30) {
-          media(search: $search, type: ANIME, sort: SEARCH_MATCH) { $_mediaFields }
+          media(search: \$search, type: ANIME, sort: SEARCH_MATCH) { $_mediaFields }
         }
       }
     ''', {'search': query});
@@ -100,9 +100,9 @@ class AnimeApi {
 
   static Future<List<Anime>> season() async {
     final data = await _aniList('''
-      query ($season: MediaSeason, $year: Int) {
+      query (\$season: MediaSeason, \$year: Int) {
         Page(page: 1, perPage: 50) {
-          media(type: ANIME, season: $season, seasonYear: $year,
+          media(type: ANIME, season: \$season, seasonYear: \$year,
             sort: POPULARITY_DESC) { $_mediaFields }
         }
       }
@@ -116,9 +116,9 @@ class AnimeApi {
     final weekAgo = now - 7 * 24 * 60 * 60;
     final weekAhead = now + 7 * 24 * 60 * 60;
     final data = await _aniList('''
-      query ($after: Int) {
+      query (\$after: Int, \$before: Int) {
         Page(page: 1, perPage: 50) {
-          airingSchedules(airingAt_greater: $after, sort: TIME) {
+          airingSchedules(airingAt_greater: \$after, airingAt_lesser: \$before, sort: TIME) {
             airingAt episode
             media { id idMal title { english romaji userPreferred } coverImage { large } format }
           }
@@ -136,8 +136,8 @@ class AnimeApi {
   static Future<dynamic> getInfo({String? anilistId, String? malId}) async {
     if (anilistId != null && anilistId.isNotEmpty) {
       final data = await _aniList('''
-        query ($id: Int) {
-          Media(id: $id, type: ANIME) { $_mediaFields
+        query (\$id: Int) {
+          Media(id: \$id, type: ANIME) { $_mediaFields
             startDate { year month day }
             endDate { year month day }
             studios(isMain: true) { nodes { name } }
@@ -171,15 +171,21 @@ class AnimeApi {
       (i) => {'number': i + 1, 'title': 'Episode ${i + 1}'})};
   }
 
-  /// Streaming providers are intentionally separate from metadata APIs.
-  /// Configure a licensed provider adapter before enabling playback.
+  // Streaming is resolved through the user's configured AniScroll API server.
+  static const streamingBaseUrl = 'http://16.176.100.190:3000';
+
+  static Future<dynamic> _streamRequest(String path) => _request(Uri.parse('$streamingBaseUrl$path'));
+
   static Future<dynamic> getServers({required String animeId, required int episode, required String type, String source = 'anilist'}) {
-    throw UnsupportedError('No authorized streaming provider is configured. Anime metadata and schedules work without a streaming backend.');
+    final query = Uri(queryParameters: {
+      'id': animeId, 'anilistId': animeId, 'ep': '$episode',
+      'type': type, 'source': source,
+    }).query;
+    return _streamRequest('/api/servers?$query');
   }
 
-  static Future<dynamic> watch({required String source, required String animeId, required int episode, required String type}) {
-    throw UnsupportedError('No authorized streaming provider is configured.');
-  }
+  static Future<dynamic> watch({required String source, required String animeId, required int episode, required String type}) =>
+      _streamRequest('/api/watch/${Uri.encodeComponent(source)}/${Uri.encodeComponent(animeId)}/$episode/${Uri.encodeComponent(type)}');
 
   static Future<dynamic> health() async {
     final results = <String, dynamic>{};
