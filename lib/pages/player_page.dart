@@ -108,47 +108,30 @@ class _PlayerPageState extends State<PlayerPage> {
 
   List<_StreamSource> _extractSources(dynamic value, String serverName) {
     final found = <_StreamSource>[];
-    void walk(dynamic node, [String name = 'Server']) {
+
+    void walk(dynamic node) {
       if (node is List) {
-        for (final item in node) { walk(item, name); }
-      } else if (node is Map) {
-        final label = (node['name'] ?? node['provider'] ?? node['server'] ?? node['source'] ?? name).toString();
-        // Prefer the backend HLS proxy. When the API supplies hlsProxyUrl,
-        // do not send the origin M3U8 URL to ExoPlayer.
-        final proxyUrl = node['hlsProxyUrl'];
-        final directUrl = node['m3u8'] ?? node['url'] ?? node['file'] ??
-            node['link'] ?? node['src'] ?? node['streamUrl'] ?? node['mp4'] ?? node['hls'];
-        final selectedUrl = proxyUrl is String && proxyUrl.isNotEmpty
-            ? proxyUrl
-            : directUrl;
-        var extracted = false;
-        if (selectedUrl is String &&
-            (selectedUrl.startsWith('http://') || selectedUrl.startsWith('https://'))) {
-          final isMedia = selectedUrl.contains('.m3u8') ||
-              selectedUrl.contains('/api/proxy/hls') ||
-              selectedUrl.contains('.mp4') ||
-              node['type'] == 'hls' || node['type'] == 'mp4' ||
-              node['isM3U8'] == true || node['playbackMode'] == 'hls';
-          if (isMedia) {
-            found.add(_StreamSource(
-              proxyUrl is String && proxyUrl.isNotEmpty
-                  ? '$serverName (HLS Proxy)'
-                  : '$serverName (Direct fallback)',
-              selectedUrl,
-              serverName,
-            ));
-            extracted = true;
-          }
+        for (final item in node) {
+          walk(item);
         }
-        if (!extracted) {
-          for (final entry in node.entries) {
-            if (entry.value is Map || entry.value is List) {
-              walk(entry.value, entry.key.toString());
-            }
+      } else if (node is Map) {
+        // Only accept the backend's HLS proxy URL. Never pass the origin
+        // M3U8 URL directly to ExoPlayer; a failed proxy means try another server.
+        final proxyUrl = node['hlsProxyUrl'];
+        if (proxyUrl is String &&
+            proxyUrl.isNotEmpty &&
+            (proxyUrl.startsWith('http://') || proxyUrl.startsWith('https://'))) {
+          found.add(_StreamSource('$serverName (HLS Proxy)', proxyUrl, serverName));
+          return;
+        }
+        for (final entry in node.entries) {
+          if (entry.value is Map || entry.value is List) {
+            walk(entry.value);
           }
         }
       }
     }
+
     walk(value);
     final unique = <String>{};
     return found.where((source) => unique.add(source.url)).toList();
