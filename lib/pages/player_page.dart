@@ -37,34 +37,72 @@ class _PlayerPageState extends State<PlayerPage> {
       setState(() { _loading = true; _error = ''; });
     }
     try {
-      final response = await AnimeApi.getServers(animeId: widget.anime.id, episode: widget.episode, type: _streamType, source: widget.anime.source);
-      var sources = _extractSources(response);
-      // The servers endpoint may return provider names/IDs rather than direct
-      // media URLs. Resolve through the documented watch endpoint as fallback.
-      if (sources.isEmpty) {
-        final streamResponse = await AnimeApi.watch(
-          source: widget.anime.source,
-          animeId: widget.anime.id,
-          episode: widget.episode,
-          type: _streamType,
-        );
-        sources = _extractSources(streamResponse);
+      // "anilist" is the metadata source, not a streaming provider.
+      // The streaming API expects a provider such as anikoto or animeheaven.
+      final response = await AnimeApi.getServers(
+        animeId: widget.anime.id,
+        malId: widget.anime.malId,
+        episode: widget.episode,
+        type: _streamType,
+        source: 'anikoto',
+      );
+
+      final servers = response is Map && response['servers'] is List
+          ? response['servers'] as List
+          : const [];
+      final sources = <_StreamSource>[];
+
+      // /api/servers returns sourceId values, not playable URLs. Resolve each
+      // server by name through /api/watch/{source}/{id}/{ep}/{type}?server=...
+      for (final item in servers) {
+        if (item is! Map) {
+          continue;
+        }
+        final serverName = (item['name'] ?? '').toString();
+        if (serverName.isEmpty) {
+          continue;
+        }
+        try {
+          final streamResponse = await AnimeApi.watch(
+            source: 'anikoto',
+            animeId: widget.anime.id,
+            malId: widget.anime.malId,
+            episode: widget.episode,
+            type: _streamType,
+            server: serverName,
+          );
+          final resolved = _extractSources(streamResponse);
+          sources.addAll(resolved);
+        } catch (_) {
+          // Try the next available server if this provider fails.
+        }
       }
-      if (sources.isEmpty) {
-        throw Exception('The streaming API returned no M3U8 or MP4 URL. Check /api/servers and /api/watch on your server.');
+
+      final uniqueUrls = <String>{};
+      final playable = sources.where((source) => uniqueUrls.add(source.url)).toList();
+      if (playable.isEmpty) {
+        throw Exception('No playable stream was returned. The server list loaded, but every /api/watch request failed or returned no M3U8/MP4 URL.');
       }
       if (!mounted) {
         return;
       }
-      setState(() => _sources = sources);
+      setState(() => _sources = playable);
       Object? lastError;
-      for (var i = 0; i < sources.length; i++) {
-        try { await _playSource(i); return; } catch (error) { lastError = error; }
+      for (var i = 0; i < playable.length; i++) {
+        try {
+          await _playSource(i);
+          return;
+        } catch (error) {
+          lastError = error;
+        }
       }
       throw Exception(lastError ?? 'Every available server failed.');
     } catch (error) {
       if (mounted) {
-        setState(() { _loading = false; _error = error.toString().replaceFirst('Exception: ', ''); });
+        setState(() {
+          _loading = false;
+          _error = error.toString().replaceFirst('Exception: ', '');
+        });
       }
     }
   }
@@ -76,8 +114,8 @@ class _PlayerPageState extends State<PlayerPage> {
         for (final item in node) { walk(item, name); }
       } else if (node is Map) {
         final label = (node['name'] ?? node['provider'] ?? node['server'] ?? node['source'] ?? name).toString();
-        final url = node['url'] ?? node['file'] ?? node['link'] ?? node['src'] ?? node['streamUrl'] ?? node['m3u8'] ?? node['mp4'] ?? node['hls'];
-        if (url is String && (url.startsWith('http://') || url.startsWith('https://')) && (url.contains('.m3u8') || url.contains('.mp4') || node['type'] == 'hls' || node['type'] == 'mp4' || node['isM3U8'] == true)) {
+        final url = node['url'] ?? node['file'] ?? node['link'] ?? node['src'] ?? node['streamUrl'] ?? node['hlsProxyUrl'] ?? node['m3u8'] ?? node['mp4'] ?? node['hls'];
+        if (url is String && (url.startsWith('http://') || url.startsWith('https://')) && (url.contains('.m3u8') || url.contains('.mp4') || node['type'] == 'hls' || node['type'] == 'mp4' || node['isM3U8'] == true || node['playbackMode'] == 'hls')) {
           found.add(_StreamSource(label, url));
         } else {
           for (final entry in node.entries) {
