@@ -141,7 +141,10 @@ class _PlayerPageState extends State<PlayerPage> {
       await next.initialize().timeout(const Duration(seconds: 35));
       await next.setLooping(false);
       await next.setPlaybackSpeed(_speed);
-      if (!mounted) { await next.dispose(); return; }
+      if (!mounted) {
+        await next.dispose();
+        return;
+      }
       final previous = _controller;
       setState(() { _controller = next; _selectedSource = index; _loading = false; _error = ''; });
       await next.play();
