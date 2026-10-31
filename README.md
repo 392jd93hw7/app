@@ -1,54 +1,57 @@
 # AniScroll
 
-Flutter anime discovery and streaming companion for Android.
+Flutter anime discovery and streaming companion for Android (minimum Android 10 / API 29).
 
-## Project structure
+## Current app structure
 
-```text
-lib/
-  main.dart
-  app.dart
-  core/
-    theme.dart
-  data/
-    sample_anime.dart
-  models/
-    anime.dart
-  services/
-    anime_api.dart
-  widgets/
-    anime_widgets.dart
-  pages/
-    main_shell.dart
-    home_page.dart
-    discover_page.dart
-    schedule_page.dart
-    watchlist_page.dart
-    profile_page.dart
-    anime_detail_page.dart
-    player_page.dart
-```
+- `lib/models/anime.dart`: normalized AniList/MAL-style anime metadata model.
+- `lib/services/anime_api.dart`: HTTP API client for search, seasonal catalogue, info, episodes, server lookup, watch resolution, health, and selected MAL endpoints.
+- `lib/pages/home_page.dart`: live seasonal catalogue, featured anime, continue-watching rail.
+- `lib/pages/discover_page.dart`: debounced API search with explicit loading/error/empty states.
+- `lib/pages/schedule_page.dart`: displays only confirmed `nextAiringEpisode` timestamps returned by the API; it does not invent airing times.
+- `lib/pages/anime_detail_page.dart`: metadata and episode-list requests.
+- `lib/pages/player_page.dart`: video_player-based player, server selection, sub/dub server-type toggle, seek, speed and fullscreen controls.
+- `lib/pages/main_shell.dart`: Home, Discover, Schedule, Watchlist and Profile navigation.
 
-Each screen has its own file under `lib/pages/`. Shared UI components are in `lib/widgets/`; data models, API logic, theme and sample data are separated into their own folders.
+## API
 
-## Run and build
+Base URL: `http://16.176.100.190:3000` (configured in `lib/services/anime_api.dart`).
+
+The client uses the documented routes:
+- `GET /api/search?q=`
+- `GET /api/info`
+- `GET /api/episodes`
+- `GET /api/servers`
+- `GET /api/watch/{source}/{id}/{ep}/{type}`
+- `GET /api/health`
+- `GET /api/anilist/season`
+- `GET /api/anilist/top-banners`
+- selected `/api/mal/anime/{id}...` routes
+
+The client accepts HTTP 200 and documented partial-success HTTP 206 responses and surfaces API error/detail messages. Exact response fields vary by provider; unsupported or missing fields are handled with empty/error states rather than fabricated metadata.
+
+## Run and validate in GitHub Codespaces
+
+After pulling the latest `main`:
 
 ```bash
+git pull --ff-only origin main
 flutter pub get
 dart format lib
 flutter analyze
 flutter run
+```
+
+Build a debug APK:
+
+```bash
 flutter build apk --debug
 ```
 
 APK output: `build/app/outputs/flutter-apk/app-debug.apk`.
 
-## API
+## Current limitations
 
-Development API base URL is configured in `lib/services/anime_api.dart`: `http://16.176.100.190:3000`. Search uses `GET /api/search?q=`; detail metadata attempts `GET /api/info?anilistId=`.
+The API integration is a first end-to-end pass and must be validated against the live API's exact JSON response shapes. The current app keeps watchlist, history and profile selection in memory; it does not yet persist four separate profiles. The player uses Flutter's `video_player`: external subtitle/audio track selection, subtitle styling, picture-in-picture, HLS quality selection, previews, reliable intro/outro skip markers, auto-next countdown, and downloads are not implemented. Download functionality must only be added for streams the provider explicitly authorizes. Notifications and persistent per-profile subtitle/audio preferences also remain to be implemented.
 
-## Current implementation notes
-
-This is a first-pass app foundation. Schedule rows are sample entries; watchlist, history and profile selection are currently in-memory. The player page is a UI foundation and does not yet play video. Provider resolution, native HLS/MP4 playback, subtitles, audio tracks, downloads, persistent profiles, notifications, picture-in-picture and live airing data need additional backend and Android integration.
-
-Only stream content you are authorized to access and play.
+Only use sources and streams you are authorized to access and play.
