@@ -86,7 +86,7 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
           return Column(children: episodes.asMap().entries.map((entry) {
             final item = entry.value;
             final number = _episodeNumber(item, entry.key + 1);
-            final title = item is Map ? (item['title'] ?? item['name'] ?? 'Episode $number').toString() : 'Episode $number';
+            final title = item is Map ? (item['title'] ?? item['canonicalTitle'] ?? item['name'] ?? 'Episode $number').toString() : 'Episode $number';
             final synopsis = item is Map ? (item['description'] ?? item['synopsis'] ?? '').toString() : '';
             return _episodeTile(number, title, synopsis);
           }).toList());
@@ -95,10 +95,19 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
     ]),
   );
 
-  Widget _episodeTile(int number, String title, String synopsis) => Card(
+  Widget _episodeNumberBadge(int number) => Container(
+    width: 76, height: 48, alignment: Alignment.center,
+    decoration: BoxDecoration(color: appPurple.withValues(alpha: .16), borderRadius: BorderRadius.circular(8)),
+    child: Text('$number', style: const TextStyle(color: appCyan, fontWeight: FontWeight.bold)),
+  );
+
+  Widget _episodeTile(int number, String title, String synopsis, [String thumbnail = '']) => Card(
     color: appPanel,
     child: ListTile(
-      leading: Container(width: 44, height: 48, alignment: Alignment.center, decoration: BoxDecoration(color: appPurple.withValues(alpha: .16), borderRadius: BorderRadius.circular(10)), child: Text('$number', style: const TextStyle(color: appCyan, fontWeight: FontWeight.bold))),
+      leading: ClipRRect(borderRadius: BorderRadius.circular(8), child: thumbnail.isNotEmpty
+          ? Image.network(thumbnail, width: 76, height: 48, fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _episodeNumberBadge(number))
+          : _episodeNumberBadge(number)),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: synopsis.isEmpty ? null : Text(synopsis, maxLines: 2, overflow: TextOverflow.ellipsis),
       trailing: const Icon(Icons.play_circle_outline, color: appPurple),
