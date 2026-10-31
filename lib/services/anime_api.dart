@@ -205,14 +205,12 @@ class AnimeApi {
         final thumbnailUrl = thumbnail is Map
             ? (thumbnail['original'] ?? thumbnail['large'] ?? thumbnail['small'])
             : thumbnail;
+        final titles = attributes['titles'];
+        final episodeTitle = attributes['canonicalTitle'] ??
+            (titles is Map ? (titles['en_us'] ?? titles['en_jp'] ?? titles['ja_jp']) : null);
         episodes.add({
           'number': attributes['number'],
-          'title': attributes['canonicalTitle'] ??
-              attributes['titles'] is Map
-                  ? (attributes['canonicalTitle'] ??
-                      (attributes['titles'] as Map)['en_us'] ??
-                      (attributes['titles'] as Map)['en_jp'])
-                  : attributes['canonicalTitle'],
+          'title': episodeTitle ?? '',
           'description': attributes['synopsis'] ?? attributes['description'] ?? '',
           'thumbnail': thumbnailUrl ?? '',
         });
