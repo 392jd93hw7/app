@@ -23,7 +23,7 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
     super.initState();
     saved = widget.isSaved;
     _info = AnimeApi.getInfo(anilistId: widget.anime.source == 'anilist' ? widget.anime.id : null, malId: widget.anime.malId.isNotEmpty ? widget.anime.malId : (widget.anime.source == 'mal' ? widget.anime.id : null));
-    _episodes = AnimeApi.getEpisodes(animeId: widget.anime.id, source: widget.anime.source);
+    _episodes = AnimeApi.getEpisodes(animeId: widget.anime.id, source: widget.anime.source, malId: widget.anime.malId);
   }
 
   void toggle() { setState(() => saved = !saved); widget.onSave(); }
