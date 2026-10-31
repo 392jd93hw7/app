@@ -25,6 +25,7 @@ class _PlayerPageState extends State<PlayerPage> {
   double _speed = 1;
   Timer? _hideTimer;
   bool _autoFallbackInProgress = false;
+  final List<String> _serverFailures = <String>[];
 
   @override
   void initState() {
@@ -88,6 +89,7 @@ class _PlayerPageState extends State<PlayerPage> {
         return;
       }
       setState(() => _sources = playable);
+      _serverFailures.clear();
       final started = await _tryServersFrom(0);
       if (started) {
         return;
@@ -158,13 +160,20 @@ class _PlayerPageState extends State<PlayerPage> {
         return true;
       } catch (error) {
         lastError = error;
+        final detail = '$serverName: ${error.toString()}';
+        _serverFailures.add(detail);
+        debugPrint('AniScroll playback fallback failed: $detail');
       }
     }
     if (mounted) {
       setState(() {
         _loading = false;
-        _error = lastError?.toString().replaceFirst('Exception: ', '') ??
-            'No other streaming servers are available.';
+        _error = [
+          'Could not play any available server.',
+          if (_serverFailures.isNotEmpty) ..._serverFailures,
+          if (_serverFailures.isEmpty && lastError != null) lastError.toString(),
+          if (_serverFailures.isEmpty && lastError == null) 'No other streaming servers are available.',
+        ].join('\\n\\n');
       });
     }
     return false;
