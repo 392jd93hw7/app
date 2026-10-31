@@ -37,7 +37,9 @@ class _MainShellState extends State<MainShell> {
       isSaved: saved.any((item) => item.id == anime.id),
       onSave: () => toggle(anime),
       onPlay: (episode) {
-        if (!history.any((item) => item.id == anime.id)) setState(() => history.insert(0, anime));
+        if (!history.any((item) => item.id == anime.id)) {
+          setState(() => history.insert(0, anime));
+        }
         Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(anime: anime, episode: episode)));
       },
     )));
