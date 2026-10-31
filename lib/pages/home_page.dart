@@ -45,7 +45,9 @@ class _HomePageState extends State<HomePage> {
               return Padding(padding: const EdgeInsets.all(20), child: Text('Could not load anime from the API. ${snapshot.error}', style: const TextStyle(color: appMuted)));
             }
             final items = snapshot.data ?? [];
-            if (items.isEmpty) return const Padding(padding: EdgeInsets.all(20), child: Text('No seasonal anime returned by the API.', style: TextStyle(color: appMuted)));
+            if (items.isEmpty) {
+              return const Padding(padding: EdgeInsets.all(20), child: Text('No seasonal anime returned by the API.', style: TextStyle(color: appMuted)));
+            }
             final featured = items.first;
             return Column(children: [
               Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: GestureDetector(
