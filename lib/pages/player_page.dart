@@ -219,7 +219,15 @@ class _PlayerPageState extends State<PlayerPage> {
           PopupMenuButton<double>(
             initialValue: _speed, color: const Color(0xFF202033),
             onSelected: (speed) { setState(() => _speed = speed); video.setPlaybackSpeed(speed); },
-            itemBuilder: (_) => [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].map((speed) => PopupMenuItem(value: speed, child: Text('${speed}x', style: const TextStyle(color: Colors.white)))).toList(),
+            itemBuilder: (_) => [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+                .map((speed) => PopupMenuItem<double>(
+                      value: speed,
+                      child: Text(
+                        '${speed}x',
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ))
+                .toList(),
             child: Text('${_speed}x', style: const TextStyle(color: Colors.white)),
           ),
         ]),
