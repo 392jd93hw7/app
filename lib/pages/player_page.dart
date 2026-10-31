@@ -119,7 +119,9 @@ class _PlayerPageState extends State<PlayerPage> {
           found.add(_StreamSource(label, url));
         } else {
           for (final entry in node.entries) {
-            if (entry.value is Map || entry.value is List) walk(entry.value, entry.key.toString());
+            if (entry.value is Map || entry.value is List) {
+              walk(entry.value, entry.key.toString());
+            }
           }
         }
       }
