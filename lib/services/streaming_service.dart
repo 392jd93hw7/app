@@ -60,7 +60,9 @@ class StreamingService {
         }
       }
     }
-    if (result.isEmpty) throw const FormatException('No streaming servers were returned.');
+    if (result.isEmpty) {
+      throw const FormatException('No streaming servers were returned.');
+    }
     return result;
   }
 
