@@ -200,6 +200,15 @@ class _PlayerPageState extends State<PlayerPage> {
       await previous?.dispose();
       _scheduleHide();
     } catch (error) {
+      // If initialization succeeded but playback startup failed, do not leave
+      // a disposed controller attached to the widget tree while trying the
+      // next server.
+      if (identical(_controller, next) && mounted) {
+        setState(() {
+          _controller = null;
+          _status = PlayerStatus.initializing;
+        });
+      }
       await next?.dispose();
       rethrow;
     }
