@@ -107,7 +107,7 @@ class _AnimeDetailPageState extends State<AnimeDetailPage> {
     child: ListTile(
       leading: ClipRRect(borderRadius: BorderRadius.circular(8), child: thumbnail.isNotEmpty
           ? Image.network(thumbnail, width: 76, height: 48, fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _episodeNumberBadge(number))
+              errorBuilder: (_, _, _) => _episodeNumberBadge(number))
           : _episodeNumberBadge(number)),
       title: Text(title, maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: synopsis.isEmpty ? null : Text(synopsis, maxLines: 2, overflow: TextOverflow.ellipsis),
