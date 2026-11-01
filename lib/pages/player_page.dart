@@ -268,7 +268,7 @@ class _PlayerPageState extends State<PlayerPage> {
         request.headers.set(HttpHeaders.userAgentHeader, 'AniScroll/1.0');
         final response = await request.close().timeout(const Duration(seconds: 20));
         if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw HttpException('Subtitle request failed (\${response.statusCode}).');
+          throw HttpException('Subtitle request failed (${response.statusCode}).');
         }
         final content = await response.transform(const Utf8Decoder()).join();
         final cues = _parseVtt(content);
@@ -283,7 +283,9 @@ class _PlayerPageState extends State<PlayerPage> {
         client.close(force: true);
       }
     } catch (error) {
-      if (mounted) setState(() => _error = 'Could not load subtitles: \${_errorText(error)}');
+      if (mounted) {
+        setState(() => _error = 'Could not load subtitles: ${_errorText(error)}');
+      }
     }
   }
 
