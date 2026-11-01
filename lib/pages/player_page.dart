@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -156,6 +157,9 @@ class _PlayerPageState extends State<PlayerPage> {
         _selectedServer = index;
         _currentServer = source.server;
         _subtitleTracks = source.subtitles;
+        _selectedSubtitleIndex = -1;
+        _subtitleCue = '';
+        _subtitleCues = [];
         _error = null;
         _status = PlayerStatus.ready;
       });
@@ -332,6 +336,9 @@ class _PlayerPageState extends State<PlayerPage> {
     final old = _controller;
     _savedPosition = Duration.zero;
     _type = _type == 'sub' ? 'dub' : 'sub';
+    _selectedSubtitleIndex = -1;
+    _subtitleCue = '';
+    _subtitleCues = [];
     await old?.pause();
     await old?.dispose();
     if (mounted) {
@@ -457,7 +464,7 @@ class _PlayerPageState extends State<PlayerPage> {
           behavior: HitTestBehavior.opaque,
           onTap: _toggleControls,
           child: AspectRatio(
-            aspectRatio: ready && video!.value.aspectRatio > 0 ? video.value.aspectRatio : 16 / 9,
+            aspectRatio: (video?.value.aspectRatio ?? 0) > 0 ? video!.value.aspectRatio : 16 / 9,
             child: Stack(alignment: Alignment.center, children: [
             if (ready)
               Positioned.fill(child: VideoPlayer(video!))
