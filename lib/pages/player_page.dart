@@ -248,6 +248,86 @@ class _PlayerPageState extends State<PlayerPage> {
     await _tryServers(index, generation);
   }
 
+  Future<void> _selectSubtitle(int index) async {
+    if (index < 0 || index >= _subtitleTracks.length) {
+      setState(() { _selectedSubtitleIndex = -1; _subtitleCue = ''; _subtitleCues = []; });
+      return;
+    }
+    final url = (_subtitleTracks[index]['url'] ?? '').toString();
+    if (url.isEmpty) return;
+    try {
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
+      try {
+        final request = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 15));
+        request.headers.set(HttpHeaders.userAgentHeader, 'AniScroll/1.0');
+        final response = await request.close().timeout(const Duration(seconds: 20));
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          throw HttpException('Subtitle request failed (\${response.statusCode}).');
+        }
+        final content = await response.transform(const Utf8Decoder()).join();
+        final cues = _parseVtt(content);
+        if (!mounted) return;
+        setState(() {
+          _selectedSubtitleIndex = index;
+          _subtitleCues = cues;
+          _subtitleCue = '';
+        });
+        _updateSubtitleCue(_controller?.value.position ?? Duration.zero);
+      } finally {
+        client.close(force: true);
+      }
+    } catch (error) {
+      if (mounted) setState(() => _error = 'Could not load subtitles: \${_errorText(error)}');
+    }
+  }
+
+  List<_SubtitleCue> _parseVtt(String content) {
+    final result = <_SubtitleCue>[];
+    final blocks = content.replaceAll('\r', '').split(RegExp(r'\n\s*\n'));
+    for (final block in blocks) {
+      final lines = block.split('\n').map((line) => line.trim()).where((line) => line.isNotEmpty).toList();
+      final timingIndex = lines.indexWhere((line) => line.contains('-->'));
+      if (timingIndex < 0 || timingIndex + 1 >= lines.length) continue;
+      final times = lines[timingIndex].split('-->');
+      if (times.length != 2) continue;
+      final start = _parseVttTime(times[0].trim());
+      final end = _parseVttTime(times[1].trim().split(RegExp(r'\s+')).first);
+      if (start == null || end == null) continue;
+      final text = lines.skip(timingIndex + 1).join('\n')
+          .replaceAll(RegExp(r'<[^>]*>'), '')
+          .replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>');
+      if (text.isNotEmpty) result.add(_SubtitleCue(start, end, text));
+    }
+    return result;
+  }
+
+  Duration? _parseVttTime(String value) {
+    final parts = value.replace(',', '.').split(':');
+    if (parts.length < 2 || parts.length > 3) return null;
+    final secondsParts = parts.last.split('.');
+    final wholeSeconds = int.tryParse(secondsParts.first);
+    final millis = secondsParts.length > 1
+        ? int.tryParse((secondsParts[1] + '000').substring(0, 3)) ?? 0 : 0;
+    final minutes = int.tryParse(parts[parts.length - 2]);
+    final hours = parts.length == 3 ? int.tryParse(parts[0]) ?? 0 : 0;
+    if (wholeSeconds == null || minutes == null) return null;
+    return Duration(hours: hours, minutes: minutes, seconds: wholeSeconds, milliseconds: millis);
+  }
+
+  void _updateSubtitleCue(Duration position) {
+    if (_selectedSubtitleIndex < 0 || _subtitleCues.isEmpty) return;
+    final cue = _subtitleCues.where((item) => position >= item.start && position <= item.end)
+        .map((item) => item.text).firstWhere((text) => true, orElse: () => '');
+    if (cue != _subtitleCue && mounted) setState(() => _subtitleCue = cue);
+  }
+
+  int _episodeNumber(dynamic item, int fallback) {
+    if (item is Map) {
+      return int.tryParse((item['number'] ?? item['episode'] ?? item['ep'] ?? item['episodeNumber'] ?? fallback).toString()) ?? fallback;
+    }
+    return fallback;
+  }
+
   Future<void> _switchType() async {
     final old = _controller;
     _savedPosition = Duration.zero;
