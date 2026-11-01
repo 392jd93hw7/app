@@ -321,6 +321,26 @@ class AnimeApi {
     return episodes;
   }
 
+  static Future<List<dynamic>> _getBackendEpisodes(String anilistId) async {
+    final uri = Uri.parse(
+      '$streamingBaseUrl/api/episodes?anilistId=${Uri.encodeComponent(anilistId)}',
+    );
+    final response = await _request(uri);
+    if (response is! Map || response['episodes'] is! List) {
+      return const [];
+    }
+    return (response['episodes'] as List).whereType<Map>().map((item) {
+      return {
+        'number': item['num'] ?? item['number'] ?? item['episode'],
+        'title': item['title'] ?? '',
+        'description': item['description'] ?? item['synopsis'] ?? '',
+        'thumbnail': item['thumbnail'] ?? item['image'] ?? '',
+        // Preserve the provider episode ID for future provider-aware playback.
+        'id': item['id'],
+      };
+    }).toList();
+  }
+
   static Future<dynamic> getEpisodes({
     required String animeId,
     String source = 'anilist',
@@ -403,7 +423,17 @@ class AnimeApi {
           };
         }
       }
-      throw Exception('AniList and MyAnimeList did not return an episode count or episode list.');
+      try {
+        final backendEpisodes = await _getBackendEpisodes('$id');
+        if (backendEpisodes.isNotEmpty) {
+          return {'data': backendEpisodes};
+        }
+      } catch (_) {
+        // Continue to the final error if the streaming backend is unavailable.
+      }
+      throw Exception(
+        'AniList, MyAnimeList and the streaming backend did not return an episode list.',
+      );
     }
 
     List<dynamic> kitsuEpisodes = const [];
