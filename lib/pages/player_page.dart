@@ -167,7 +167,6 @@ class _PlayerPageState extends State<PlayerPage> {
     if (!_active(generation) || !identical(controller, _controller)) return;
     final value = controller.value;
     if (value.hasError && !_switching) {
-      _switching = true;
       _savedPosition = value.position;
       final next = _selectedServer + 1;
       debugPrint('[PLAYER] Playback failed: ${value.errorDescription}');
