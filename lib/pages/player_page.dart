@@ -61,6 +61,8 @@ class _PlayerPageState extends State<PlayerPage> {
   String _subtitleCue = '';
   List<_SubtitleCue> _subtitleCues = [];
 
+  static const MethodChannel _pipChannel = MethodChannel('aniscroll/pip');
+
   bool get _busy => {
     PlayerStatus.fetchingSource,
     PlayerStatus.validatingSource,
@@ -390,6 +392,44 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  String _currentEpisodeTitle() {
+    for (final item in _episodes) {
+      if (_episodeNumber(item, -1) != widget.episode || item is! Map) {
+        continue;
+      }
+      final title = (item['title'] ?? item['canonicalTitle'] ?? item['name'] ?? '')
+          .toString()
+          .trim();
+      if (title.isEmpty ||
+          title.toLowerCase() == 'episode ${widget.episode}' ||
+          title.toLowerCase() == 'ep ${widget.episode}') {
+        return '';
+      }
+      return title;
+    }
+    return '';
+  }
+
+  Future<void> _enterPictureInPicture(VideoPlayerController video) async {
+    try {
+      final size = video.value.size;
+      await _pipChannel.invokeMethod<void>('enterPip', {
+        'width': size.width.round().clamp(1, 10000),
+        'height': size.height.round().clamp(1, 10000),
+      });
+    } on PlatformException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message ?? 'Picture-in-picture is unavailable.')),
+      );
+    } on MissingPluginException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Picture-in-picture is not available on this device.')),
+      );
+    }
+  }
+
   int _episodeNumber(dynamic item, int fallback) {
     if (item is Map) {
       return int.tryParse(
@@ -598,7 +638,18 @@ class _PlayerPageState extends State<PlayerPage> {
           alignment: Alignment.center,
           children: [
             if (ready)
-              Positioned.fill(child: VideoPlayer(video!))
+              Positioned.fill(
+                child: ClipRect(
+                  child: InteractiveViewer(
+                    minScale: 1,
+                    maxScale: 3,
+                    panEnabled: true,
+                    scaleEnabled: true,
+                    clipBehavior: Clip.hardEdge,
+                    child: SizedBox.expand(child: VideoPlayer(video!)),
+                  ),
+                ),
+              )
             else
               const Center(
                 child: Icon(
@@ -658,6 +709,36 @@ class _PlayerPageState extends State<PlayerPage> {
                       label: const Text('Retry servers'),
                     ),
                   ],
+                ),
+              ),
+            if (ready)
+              Positioned(
+                top: 14,
+                left: 16,
+                right: 16,
+                child: IgnorePointer(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _currentEpisodeTitle().isEmpty
+                            ? 'EPISODE ${widget.episode}'
+                            : 'EPISODE ${widget.episode}  •  ${_currentEpisodeTitle()}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          shadows: [
+                            Shadow(color: Colors.black, blurRadius: 5),
+                            Shadow(color: Colors.black, blurRadius: 10),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             if (_selectedSubtitleIndex >= 0 && _subtitleCue.isNotEmpty)
@@ -826,6 +907,14 @@ class _PlayerPageState extends State<PlayerPage> {
                     Text(
                       _time(value.duration),
                       style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
+                    IconButton(
+                      tooltip: 'Picture-in-picture',
+                      onPressed: () => _enterPictureInPicture(video),
+                      icon: const Icon(
+                        Icons.picture_in_picture_alt,
+                        color: Colors.white,
+                      ),
                     ),
                     IconButton(
                       onPressed: _toggleFullscreen,
