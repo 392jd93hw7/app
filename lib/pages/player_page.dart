@@ -152,7 +152,7 @@ class _PlayerPageState extends State<PlayerPage> {
       });
       next.addListener(() => _onControllerChanged(next!, generation));
       debugPrint('[PLAYER] Controller initialized: ${source.server}');
-      await next.play();
+      await next.play().timeout(const Duration(seconds: 10));
       if (!_active(generation)) return;
       setState(() => _status = PlayerStatus.playing);
       await previous?.dispose();
