@@ -40,11 +40,11 @@ class StreamingService {
     required int episode,
     required String type,
   }) async {
-    print('[API] Request started: servers');
+    debugPrint('[API] Request started: servers');
     final response = await AnimeApi.getServers(
       animeId: animeId, malId: malId, episode: episode, type: type, source: 'anikoto',
     ).timeout(requestTimeout);
-    print('[API] Response received: servers');
+    debugPrint('[API] Response received: servers');
     if (response is! Map || response['servers'] is! List) {
       throw const FormatException('Unexpected server-list response.');
     }
@@ -53,7 +53,7 @@ class StreamingService {
     for (final item in response['servers'] as List) {
       if (item is Map) {
         final name = (item['name'] ?? '').toString().trim();
-        if (name.isNotEmpty && seen.add(name)) result.add(StreamServer(name));
+        if (name.isNotEmpty && seen.add(name)) {\n          result.add(StreamServer(name));\n        }
       }
     }
     if (result.isEmpty) throw const FormatException('No streaming servers were returned.');
@@ -67,13 +67,13 @@ class StreamingService {
     required String type,
     required String server,
   }) async {
-    print('[API] Request started: resolve $server');
+    debugPrint('[API] Request started: resolve $server');
     final response = await AnimeApi.watch(
       source: 'anikoto', animeId: animeId, malId: malId,
       episode: episode, type: type, server: server,
     ).timeout(requestTimeout);
-    print('[API] Response received: resolve $server');
-    if (response is! Map) throw const FormatException('Watch API returned invalid JSON.');
+    debugPrint('[API] Response received: resolve $server');
+    if (response is! Map) {\n      throw const FormatException('Watch API returned invalid JSON.');\n    }
     if (response['iframeOnly'] == true) {
       throw const FormatException('This server is iframe-only; native playback is not supported.');
     }
@@ -114,12 +114,12 @@ class StreamingService {
   Future<void> validateHls(Uri uri) async {
     final client = HttpClient()..connectionTimeout = validationTimeout;
     try {
-      print('[SOURCE] Playlist validation started');
+      debugPrint('[SOURCE] Playlist validation started');
       final request = await client.getUrl(uri).timeout(validationTimeout);
       headers.forEach(request.headers.set);
       final response = await request.close().timeout(validationTimeout);
       final body = await response.transform(utf8.decoder).join().timeout(validationTimeout);
-      print('[SOURCE] HTTP ${response.statusCode}; content-type=${response.headers.contentType}');
+      debugPrint('[SOURCE] HTTP ${response.statusCode}; content-type=${response.headers.contentType}');
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException('HLS proxy returned HTTP ${response.statusCode}.', uri: uri);
       }
@@ -127,7 +127,7 @@ class StreamingService {
         final preview = body.length > 160 ? body.substring(0, 160) : body;
         throw FormatException('Proxy response is not an HLS playlist: ${preview.replaceAll(RegExp(r'\\s+'), ' ')}');
       }
-      print('[SOURCE] Playlist contains #EXTM3U');
+      debugPrint('[SOURCE] Playlist contains #EXTM3U');
     } finally {
       client.close(force: true);
     }
