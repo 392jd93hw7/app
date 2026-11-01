@@ -154,8 +154,6 @@ class AnimeApi {
     throw ArgumentError('An AniList ID or MAL ID is required.');
   }
 
-  static const _kitsuUrl = 'https://kitsu.io/api/edge';
-
   static Future<List<dynamic>> _getKitsuEpisodes(String anilistId) async {
     // Kitsu exposes cross-service mappings. Resolve the Kitsu anime ID using
     // AniList's ID rather than relying on a title search that can mis-match sequels.
