@@ -604,11 +604,10 @@ class _PlayerPageState extends State<PlayerPage> {
                         errorBuilder: (_, _, _) => _episodeThumb(number))
                     : _episodeThumb(number),
               ),
-              title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
-              subtitle: playing
-                  ? const Text('NOW PLAYING', style: TextStyle(color: appPurple, fontSize: 11, fontWeight: FontWeight.bold))
-                  : Text('Episode $number', style: const TextStyle(color: appMuted, fontSize: 12)),
+              title: Text(playing ? 'NOW PLAYING' : title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14,
+                  color: playing ? appPurple : null)),
+              subtitle: Text('Episode $number', style: const TextStyle(color: appMuted, fontSize: 12)),
               trailing: playing
                   ? const Icon(Icons.equalizer, color: appPurple)
                   : const Icon(Icons.play_circle_outline, color: appPurple),
