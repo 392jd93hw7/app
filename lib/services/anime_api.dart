@@ -135,6 +135,57 @@ class AnimeApi {
     return toAnimeList(page is Map ? page['media'] : null);
   }
 
+  static Future<List<Anime>> discover({
+    String? search,
+    List<String> genres = const [],
+    int? year,
+    String? season,
+    String? format,
+    String? status,
+    String sort = 'POPULARITY_DESC',
+    int page = 1,
+  }) async {
+    final data = await _aniList(
+      '''
+      query (
+        \$page: Int,
+        \$search: String,
+        \$genres: [String],
+        \$year: Int,
+        \$season: MediaSeason,
+        \$format: MediaFormat,
+        \$status: MediaStatus,
+        \$sort: [MediaSort]
+      ) {
+        Page(page: \$page, perPage: 30) {
+          media(
+            type: ANIME,
+            search: \$search,
+            genre_in: \$genres,
+            seasonYear: \$year,
+            season: \$season,
+            format: \$format,
+            status: \$status,
+            sort: \$sort
+          ) { $_mediaFields }
+        }
+      }
+    ''',
+      {
+        'page': page,
+        'search': search == null || search.trim().isEmpty ? null : search.trim(),
+        'genres': genres.isEmpty ? null : genres,
+        'year': year,
+        'season': season,
+        'format': format,
+        'status': status,
+        'sort': [sort],
+      },
+    );
+    final pageData = data is Map ? data['Page'] : null;
+    return toAnimeList(pageData is Map ? pageData['media'] : null);
+  }
+
   static String _currentSeason() {
     final month = DateTime.now().month;
     if (month >= 1 && month <= 3) return 'WINTER';
