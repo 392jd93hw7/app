@@ -288,14 +288,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 
   @override
-  void dispose() {
-    _requestId++;
-    _debounce?.cancel();
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) => SafeArea(
     child: Column(
       children: [
