@@ -50,6 +50,27 @@ flutter build apk --debug
 
 APK output: `build/app/outputs/flutter-apk/app-debug.apk`.
 
+## Release signing
+
+Release builds must use a private signing key. Create `android/key.properties` locally (do not commit it) with:
+
+```properties
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=YOUR_KEY_ALIAS
+storeFile=../app-upload-key.jks
+```
+
+Place the keystore at the path specified by `storeFile`. The release Gradle task intentionally does not fall back to the debug signing key; without this file, the generated release APK is unsigned and is not ready for distribution. Keep a secure backup of the keystore and passwords.
+
+The streaming API currently defaults to the HTTP endpoint configured in `lib/services/anime_api.dart`. Production deployment should provide an HTTPS endpoint using:
+
+```bash
+flutter build apk --release --dart-define=ANISCROLL_API_BASE_URL=https://your-api-domain
+```
+
+Do not ship the app against an unencrypted HTTP API.
+
 ## Current limitations
 
 The API integration is a first end-to-end pass and must be validated against the live API's exact JSON response shapes. The current app keeps watchlist, history and profile selection in memory; it does not yet persist four separate profiles. The player uses Flutter's `video_player`: external subtitle/audio track selection, subtitle styling, picture-in-picture, HLS quality selection, previews, reliable intro/outro skip markers, auto-next countdown, and downloads are not implemented. Download functionality must only be added for streams the provider explicitly authorizes. Notifications and persistent per-profile subtitle/audio preferences also remain to be implemented.
