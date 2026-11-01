@@ -49,8 +49,6 @@ defaultConfig {
             if (signingPropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
-            isMinifyEnabled = true
-            isShrinkResources = true
         }
     }
 }
