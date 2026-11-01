@@ -32,9 +32,9 @@ class _SplashPageState extends State<SplashPage>
       if (!mounted) return;
       Navigator.of(context).pushReplacement(
         PageRouteBuilder<void>(
-          pageBuilder: (_, __, ___) => const MainShell(),
+          pageBuilder: (_, _, _) => const MainShell(),
           transitionDuration: const Duration(milliseconds: 350),
-          transitionsBuilder: (_, animation, __, child) => FadeTransition(
+          transitionsBuilder: (_, animation, _, child) => FadeTransition(
             opacity: animation,
             child: child,
           ),
