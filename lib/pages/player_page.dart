@@ -467,48 +467,131 @@ class _PlayerPageState extends State<PlayerPage> {
           ),
         ],
       ),
-      body: SafeArea(child: SingleChildScrollView(child: Column(children: [
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: _toggleControls,
-          child: AspectRatio(
-            aspectRatio: (video?.value.aspectRatio ?? 0) > 0 ? video!.value.aspectRatio : 16 / 9,
-            child: Stack(alignment: Alignment.center, children: [
+      body: _fullscreen
+          ? SizedBox.expand(
+              child: Center(
+                child: AspectRatio(
+                  aspectRatio: (video?.value.aspectRatio ?? 0) > 0
+                      ? video!.value.aspectRatio
+                      : 16 / 9,
+                  child: _buildVideoSurface(video, ready),
+                ),
+              ),
+            )
+          : SafeArea(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    _buildVideoSurface(video, ready),
+                    _buildFooter(),
+                    _buildEpisodeList(),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+
+  Widget _buildVideoSurface(VideoPlayerController? video, bool ready) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: _toggleControls,
+      child: AspectRatio(
+        aspectRatio: (video?.value.aspectRatio ?? 0) > 0
+            ? video!.value.aspectRatio
+            : 16 / 9,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
             if (ready)
               Positioned.fill(child: VideoPlayer(video!))
             else
-              const Center(child: Icon(Icons.play_circle_outline, color: Colors.white24, size: 76)),
-            if (_busy) Column(mainAxisSize: MainAxisSize.min, children: [
-              const CircularProgressIndicator(color: appPurple),
-              const SizedBox(height: 14),
-              Text(_status.name == 'validatingSource' ? 'Validating stream…' : _status.name == 'initializing' ? 'Initializing player…' : _status.name == 'buffering' ? 'Buffering…' : 'Connecting…',
-                style: const TextStyle(color: Colors.white70)),
-            ]),
-            if (_status == PlayerStatus.error) Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.error_outline, color: Colors.redAccent, size: 40),
-                const SizedBox(height: 12),
-                const Text('Playback unavailable', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 10),
-                Text(_error ?? 'Unknown playback error', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
-                const SizedBox(height: 18),
-                FilledButton.icon(onPressed: _loadServers, icon: const Icon(Icons.refresh), label: const Text('Retry servers')),
-              ]),
-            ),
+              const Center(
+                child: Icon(
+                  Icons.play_circle_outline,
+                  color: Colors.white24,
+                  size: 76,
+                ),
+              ),
+            if (_busy)
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(color: appPurple),
+                  const SizedBox(height: 14),
+                  Text(
+                    _status.name == 'validatingSource'
+                        ? 'Validating stream…'
+                        : _status.name == 'initializing'
+                            ? 'Initializing player…'
+                            : _status.name == 'buffering'
+                                ? 'Buffering…'
+                                : 'Connecting…',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                ],
+              ),
+            if (_status == PlayerStatus.error)
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: Colors.redAccent,
+                      size: 40,
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Playback unavailable',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      _error ?? 'Unknown playback error',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                    const SizedBox(height: 18),
+                    FilledButton.icon(
+                      onPressed: _loadServers,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Retry servers'),
+                    ),
+                  ],
+                ),
+              ),
             if (_selectedSubtitleIndex >= 0 && _subtitleCue.isNotEmpty)
-              Positioned(left: 18, right: 18, bottom: 72, child: IgnorePointer(child: Text(
-                _subtitleCue, textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600,
-                  shadows: [Shadow(color: Colors.black, blurRadius: 5), Shadow(color: Colors.black, blurRadius: 9)]),
-              ))),
-            if (_controlsVisible && ready && !_busy) _buildControls(video!),
-            ]),
-          ),
+              Positioned(
+                left: 18,
+                right: 18,
+                bottom: 72,
+                child: IgnorePointer(
+                  child: Text(
+                    _subtitleCue,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      shadows: [
+                        Shadow(color: Colors.black, blurRadius: 5),
+                        Shadow(color: Colors.black, blurRadius: 9),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            if (_controlsVisible && ready && !_busy)
+              _buildControls(video!),
+          ],
         ),
-        if (!_fullscreen) _buildFooter(),
-        if (!_fullscreen) _buildEpisodeList(),
-      ]))),
+      ),
     );
   }
 
