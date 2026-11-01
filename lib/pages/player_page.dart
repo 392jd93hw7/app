@@ -639,16 +639,7 @@ class _PlayerPageState extends State<PlayerPage> {
           children: [
             if (ready)
               Positioned.fill(
-                child: ClipRect(
-                  child: InteractiveViewer(
-                    minScale: 1,
-                    maxScale: 3,
-                    panEnabled: true,
-                    scaleEnabled: true,
-                    clipBehavior: Clip.hardEdge,
-                    child: SizedBox.expand(child: VideoPlayer(video!)),
-                  ),
-                ),
+                child: VideoPlayer(video!),
               )
             else
               const Center(
