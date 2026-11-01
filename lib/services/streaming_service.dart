@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
@@ -28,7 +26,6 @@ class ResolvedStream {
 
 class StreamingService {
   static const requestTimeout = Duration(seconds: 15);
-  static const validationTimeout = Duration(seconds: 12);
   static const headers = <String, String>{
     'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
     'Referer': 'https://megaplay.buzz/',
@@ -108,7 +105,6 @@ class StreamingService {
         proxy.trim().isNotEmpty &&
         (mode.isEmpty || mode == 'hls')) {
       final uri = _uri(proxy);
-      await validateHls(uri);
       return ResolvedStream(
         server: server,
         uri: uri,
@@ -141,38 +137,6 @@ class StreamingService {
       throw const FormatException('Invalid playback URL.');
     }
     return uri;
-  }
-
-  Future<void> validateHls(Uri uri) async {
-    final client = HttpClient()..connectionTimeout = validationTimeout;
-    try {
-      debugPrint('[SOURCE] Playlist validation started');
-      final request = await client.getUrl(uri).timeout(validationTimeout);
-      headers.forEach(request.headers.set);
-      final response = await request.close().timeout(validationTimeout);
-      final body = await response
-          .transform(utf8.decoder)
-          .join()
-          .timeout(validationTimeout);
-      debugPrint(
-        '[SOURCE] HTTP ${response.statusCode}; content-type=${response.headers.contentType}',
-      );
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException(
-          'HLS proxy returned HTTP ${response.statusCode}.',
-          uri: uri,
-        );
-      }
-      if (!body.trimLeft().startsWith('#EXTM3U')) {
-        final preview = body.length > 160 ? body.substring(0, 160) : body;
-        throw FormatException(
-          'Proxy response is not an HLS playlist: ${preview.replaceAll(RegExp(r'\\s+'), ' ')}',
-        );
-      }
-      debugPrint('[SOURCE] Playlist contains #EXTM3U');
-    } finally {
-      client.close(force: true);
-    }
   }
 
   List<Map<String, dynamic>> _subtitles(dynamic raw) {
