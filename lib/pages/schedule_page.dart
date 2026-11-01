@@ -120,6 +120,12 @@ class _SchedulePageState extends State<SchedulePage> {
               ],
               selected: {selectedTab},
               showSelectedIcon: false,
+              style: SegmentedButton.styleFrom(
+                selectedBackgroundColor: appPurple.withValues(alpha: .24),
+                selectedForegroundColor: Colors.white,
+                foregroundColor: appMuted,
+                side: const BorderSide(color: appPurple),
+              ),
               onSelectionChanged: (v) => setState(() => selectedTab = v.first),
             ),
           ),
@@ -223,7 +229,7 @@ class _SchedulePageState extends State<SchedulePage> {
                       leading: Text(
                         '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}',
                         style: const TextStyle(
-                          color: appCyan,
+                          color: appPurple,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
