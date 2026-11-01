@@ -114,8 +114,7 @@ class _PlayerPageState extends State<PlayerPage> {
         'No available server could start playback.',
         ..._failures,
         'Direct M3U8 fallback is disabled.',
-      ].join('
-')));
+      ].join('\\n')));
     }
     return false;
   }
