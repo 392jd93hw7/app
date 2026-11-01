@@ -358,6 +358,7 @@ class _PlayerPageState extends State<PlayerPage> {
           .replaceAll('&gt;', '>');
       if (text.isNotEmpty) result.add(_SubtitleCue(start, end, text));
     }
+    result.sort((a, b) => a.start.compareTo(b.start));
     return result;
   }
 
@@ -384,10 +385,23 @@ class _PlayerPageState extends State<PlayerPage> {
     if (_selectedSubtitleIndex < 0 || _subtitleCues.isEmpty) {
       return;
     }
-    final cue = _subtitleCues
-        .where((item) => position >= item.start && position <= item.end)
-        .map((item) => item.text)
-        .firstWhere((text) => true, orElse: () => '');
+    // Subtitle cues are sorted by start time when parsed. Binary search
+    // keeps per-frame subtitle updates fast even for long episodes.
+    var low = 0;
+    var high = _subtitleCues.length - 1;
+    var candidate = -1;
+    while (low <= high) {
+      final middle = low + ((high - low) >> 1);
+      if (_subtitleCues[middle].start <= position) {
+        candidate = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+    final cue = candidate >= 0 && position <= _subtitleCues[candidate].end
+        ? _subtitleCues[candidate].text
+        : '';
     if (cue != _subtitleCue && mounted) {
       setState(() => _subtitleCue = cue);
     }
