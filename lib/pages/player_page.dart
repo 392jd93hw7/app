@@ -459,13 +459,15 @@ class _PlayerPageState extends State<PlayerPage> {
           ),
         ],
       ),
-      body: SafeArea(child: Column(children: [
-        Expanded(child: GestureDetector(
+      body: SafeArea(child: SingleChildScrollView(child: Column(children: [
+        GestureDetector(
           behavior: HitTestBehavior.opaque,
           onTap: _toggleControls,
-          child: Stack(alignment: Alignment.center, children: [
+          child: AspectRatio(
+            aspectRatio: ready && video!.value.aspectRatio > 0 ? video.value.aspectRatio : 16 / 9,
+            child: Stack(alignment: Alignment.center, children: [
             if (ready)
-              Center(child: AspectRatio(aspectRatio: video!.value.aspectRatio, child: VideoPlayer(video)))
+              Positioned.fill(child: VideoPlayer(video!))
             else
               const Center(child: Icon(Icons.play_circle_outline, color: Colors.white24, size: 76)),
             if (_busy) Column(mainAxisSize: MainAxisSize.min, children: [
@@ -486,11 +488,18 @@ class _PlayerPageState extends State<PlayerPage> {
                 FilledButton.icon(onPressed: _loadServers, icon: const Icon(Icons.refresh), label: const Text('Retry servers')),
               ]),
             ),
+            if (_selectedSubtitleIndex >= 0 && _subtitleCue.isNotEmpty)
+              Positioned(left: 18, right: 18, bottom: 72, child: IgnorePointer(child: Text(
+                _subtitleCue, textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w600,
+                  shadows: [Shadow(color: Colors.black, blurRadius: 5), Shadow(color: Colors.black, blurRadius: 9)]),
+              ))),
             if (_controlsVisible && ready && !_busy) _buildControls(video!),
           ]),
-        )),
+        ),
         if (!_fullscreen) _buildFooter(),
-      ])),
+        if (!_fullscreen) _buildEpisodeList(),
+      ]))),
     );
   }
 
