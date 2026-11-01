@@ -258,7 +258,9 @@ class _PlayerPageState extends State<PlayerPage> {
       return;
     }
     final url = (_subtitleTracks[index]['url'] ?? '').toString();
-    if (url.isEmpty) return;
+    if (url.isEmpty) {
+      return;
+    }
     try {
       final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
       try {
@@ -306,7 +308,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Duration? _parseVttTime(String value) {
-    final parts = value.replace(',', '.').split(':');
+    final parts = value.replaceAll(',', '.').split(':');
     if (parts.length < 2 || parts.length > 3) return null;
     final secondsParts = parts.last.split('.');
     final wholeSeconds = int.tryParse(secondsParts.first);
@@ -319,10 +321,14 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   void _updateSubtitleCue(Duration position) {
-    if (_selectedSubtitleIndex < 0 || _subtitleCues.isEmpty) return;
+    if (_selectedSubtitleIndex < 0 || _subtitleCues.isEmpty) {
+      return;
+    }
     final cue = _subtitleCues.where((item) => position >= item.start && position <= item.end)
         .map((item) => item.text).firstWhere((text) => true, orElse: () => '');
-    if (cue != _subtitleCue && mounted) setState(() => _subtitleCue = cue);
+    if (cue != _subtitleCue && mounted) {
+      setState(() => _subtitleCue = cue);
+    }
   }
 
   int _episodeNumber(dynamic item, int fallback) {
@@ -577,7 +583,9 @@ class _PlayerPageState extends State<PlayerPage> {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: appPurple)));
             }
-            if (snapshot.hasError) return const Text('Episode list is unavailable.', style: TextStyle(color: appMuted));
+            if (snapshot.hasError) {
+              return const Text('Episode list is unavailable.', style: TextStyle(color: appMuted));
+            }
             return const Text('No episode details were returned.', style: TextStyle(color: appMuted));
           },
         )
