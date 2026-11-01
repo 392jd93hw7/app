@@ -57,7 +57,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       _error = null;
     });
     try {
-      final found = await AnimeApi.discover(
+      var found = await AnimeApi.discover(
         search: _query,
         genres: _genres,
         year: _year,
@@ -66,6 +66,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
         status: _status,
         sort: _sort,
       );
+      // Retry without filters if the filtered request returns no results.
+      if (found.isEmpty &&
+          (_genres.isNotEmpty || _year != null || _season != null ||
+              _format != null || _status != null)) {
+        found = await AnimeApi.discover(search: _query, sort: _sort);
+      }
       if (!mounted || request != _requestId) return;
       setState(() {
         _results = found;
@@ -141,6 +147,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             return FilterChip(
                               label: Text(genre),
                               selected: selected,
+                              selectedColor: appPurple.withValues(alpha: .28),
+                              checkmarkColor: Colors.white,
                               onSelected: (value) => setSheetState(() {
                                 if (value) {
                                   genres.add(genre);
@@ -178,6 +186,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             return ChoiceChip(
                               label: Text(value[0] + value.substring(1).toLowerCase()),
                               selected: season == value,
+                              selectedColor: appPurple.withValues(alpha: .28),
                               onSelected: (_) => setSheetState(
                                 () => season = season == value ? null : value,
                               ),
@@ -192,6 +201,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             return ChoiceChip(
                               label: Text(value.replaceAll('_', ' ')),
                               selected: format == value,
+                              selectedColor: appPurple.withValues(alpha: .28),
                               onSelected: (_) => setSheetState(
                                 () => format = format == value ? null : value,
                               ),
@@ -209,6 +219,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                             return ChoiceChip(
                               label: Text(label),
                               selected: status == value,
+                              selectedColor: appPurple.withValues(alpha: .28),
                               onSelected: (_) => setSheetState(
                                 () => status = status == value ? null : value,
                               ),
@@ -351,6 +362,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 child: FilledButton.tonal(
                   onPressed: _openFilters,
                   style: FilledButton.styleFrom(
+                    backgroundColor: appPurple.withValues(alpha: .20),
+                    foregroundColor: appPurple,
                     padding: const EdgeInsets.symmetric(horizontal: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
@@ -383,6 +396,10 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 child: ChoiceChip(
                   label: Text(entry.value),
                   selected: selected,
+                  selectedColor: appPurple,
+                  backgroundColor: appPanel,
+                  checkmarkColor: Colors.white,
+                  labelStyle: TextStyle(color: selected ? Colors.white : null),
                   onSelected: (_) {
                     if (_sort == entry.key) return;
                     setState(() => _sort = entry.key);
@@ -404,6 +421,8 @@ class _DiscoverPageState extends State<DiscoverPage> {
                   Padding(
                     padding: const EdgeInsets.only(right: 6),
                     child: InputChip(
+                      backgroundColor: appPurple.withValues(alpha: .18),
+                      labelStyle: const TextStyle(color: Colors.white),
                       label: Text(genre),
                       onDeleted: () {
                         setState(() => _genres.remove(genre));
@@ -423,7 +442,11 @@ class _DiscoverPageState extends State<DiscoverPage> {
                 if (_status != null) _activeChip(_status!.replaceAll('_', ' '), () {
                   setState(() => _status = null); _load();
                 }),
-                ActionChip(label: const Text('Clear all'), onPressed: _clearFilters),
+                ActionChip(
+                  backgroundColor: appPanel,
+                  label: const Text('Clear all'),
+                  onPressed: _clearFilters,
+                ),
               ],
             ),
           ),
@@ -481,7 +504,12 @@ class _DiscoverPageState extends State<DiscoverPage> {
 
   Widget _activeChip(String label, VoidCallback onDelete) => Padding(
     padding: const EdgeInsets.only(right: 6),
-    child: InputChip(label: Text(label), onDeleted: onDelete),
+    child: InputChip(
+      backgroundColor: appPurple.withValues(alpha: .18),
+      labelStyle: const TextStyle(color: Colors.white),
+      label: Text(label),
+      onDeleted: onDelete,
+    ),
   );
 
   Widget _messageState({
