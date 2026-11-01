@@ -345,87 +345,84 @@ class AnimeApi {
     String source = 'anilist',
     String? malId,
   }) async {
+    const fastTimeout = Duration(seconds: 8);
     final isMalSource = source.toLowerCase() == 'mal';
     final resolvedMalId = (malId != null && malId.isNotEmpty)
         ? malId
         : (isMalSource ? animeId : '');
-
-    // MAL-backed entries must not pass their MAL ID to AniList as if it
-    // were an AniList media ID.
-    if (isMalSource && resolvedMalId.isNotEmpty) {
-      final malEpisodes = await _getMalEpisodes(resolvedMalId);
-      if (malEpisodes.isNotEmpty) {
-        return {
-          'data': malEpisodes.map((item) {
-            final episode = item is Map ? item : const {};
-            return {
-              'number': episode['mal_id'] ?? episode['episode'] ?? episode['episodeNumber'],
-              'title': episode['title'] ?? episode['title_japanese'] ?? episode['title_romanji'] ?? '',
-              'description': episode['synopsis'] ?? '',
-              'thumbnail': '',
-            };
-          }).toList(),
-        };
-      }
-    }
-
     final id = int.tryParse(animeId);
-    if (id == null || isMalSource) {
+
+    // Keep MAL-native entries on Jikan, but don't let a slow Jikan response
+    // prevent the streaming backend from supplying the episode numbers.
+    if (isMalSource || id == null) {
       if (resolvedMalId.isNotEmpty) {
-        final malEpisodes = await _getMalEpisodes(resolvedMalId);
-        return {
-          'data': malEpisodes.map((item) {
-            final episode = item is Map ? item : const {};
+        try {
+          final malEpisodes = await _getMalEpisodes(resolvedMalId)
+              .timeout(fastTimeout);
+          if (malEpisodes.isNotEmpty) {
             return {
-              'number': episode['mal_id'] ?? episode['episode'] ?? episode['episodeNumber'],
-              'title': episode['title'] ?? episode['title_japanese'] ?? episode['title_romanji'] ?? '',
-              'description': episode['synopsis'] ?? '',
-              'thumbnail': '',
+              'data': malEpisodes.map((item) {
+                final episode = item is Map ? item : const {};
+                return {
+                  'number': episode['mal_id'] ??
+                      episode['episode'] ??
+                      episode['episodeNumber'],
+                  'title': episode['title'] ??
+                      episode['title_japanese'] ??
+                      episode['title_romanji'] ??
+                      '',
+                  'description': episode['synopsis'] ?? '',
+                  'thumbnail': '',
+                };
+              }).toList(),
             };
-          }).toList(),
-        };
+          }
+        } catch (_) {
+          // Try the backend below.
+        }
       }
-      throw ArgumentError('A numeric AniList ID or MAL ID is required to load episodes.');
+      if (id == null) {
+        if (resolvedMalId.isEmpty) {
+          throw ArgumentError(
+            'A numeric AniList ID or MAL ID is required to load episodes.',
+          );
+        }
+        final backend = await _getBackendEpisodes(resolvedMalId)
+            .timeout(fastTimeout);
+        return {'data': backend};
+      }
     }
 
-    final data = await _aniList(
-      '''
-      query (\$id: Int) {
-        Media(id: \$id, type: ANIME) {
-          id
-          episodes
+    int? count;
+    try {
+      final data = await _aniList(
+        '''
+        query (\$id: Int) {
+          Media(id: \$id, type: ANIME) {
+            id
+            episodes
+          }
         }
-      }
-    ''',
-      {'id': id},
-    );
-    final media = data is Map ? data['Media'] : null;
-    final count = media is Map
-        ? int.tryParse('${media['episodes'] ?? ''}')
-        : null;
+      ''',
+        {'id': id},
+      ).timeout(fastTimeout);
+      final media = data is Map ? data['Media'] : null;
+      count = media is Map
+          ? int.tryParse('${media['episodes'] ?? ''}')
+          : null;
+    } catch (_) {
+      // AniList can be slow or temporarily unavailable; use backend numbering.
+    }
 
-    var episodeNumbers = <int>[];
-
-    // When AniList has no episode count, use Jikan if a MAL mapping exists.
-    if (count == null || count < 1 || count > 500) {
-      if (resolvedMalId.isNotEmpty) {
-        final malEpisodes = await _getMalEpisodes(resolvedMalId);
-        if (malEpisodes.isNotEmpty) {
-          return {
-            'data': malEpisodes.map((item) {
-              final episode = item is Map ? item : const {};
-              return {
-                'number': episode['mal_id'] ?? episode['episode'] ?? episode['episodeNumber'],
-                'title': episode['title'] ?? episode['title_japanese'] ?? episode['title_romanji'] ?? '',
-                'description': episode['synopsis'] ?? '',
-                'thumbnail': '',
-              };
-            }).toList(),
-          };
-        }
-      }
+    List<int> episodeNumbers = [];
+    if (count != null && count > 0 && count <= 500) {
+      episodeNumbers = List<int>.generate(count, (index) => index + 1);
+    } else {
+      // Backend episode data is the resilient numbering fallback even when
+      // AniList fails or returns an unknown episode count.
       try {
-        final backendEpisodes = await _getBackendEpisodes('$id');
+        final backendEpisodes = await _getBackendEpisodes('$id')
+            .timeout(fastTimeout);
         episodeNumbers = backendEpisodes
             .map((item) => int.tryParse('${item['number'] ?? ''}'))
             .whereType<int>()
@@ -434,24 +431,41 @@ class AnimeApi {
             .toList()
           ..sort();
       } catch (_) {
-        // Continue to the final error if the streaming backend is unavailable.
+        // Continue to MAL fallback if available.
+      }
+      if (episodeNumbers.isEmpty && resolvedMalId.isNotEmpty) {
+        try {
+          final malEpisodes = await _getMalEpisodes(resolvedMalId)
+              .timeout(fastTimeout);
+          episodeNumbers = malEpisodes
+              .map((item) => item is Map
+                  ? int.tryParse('${item['mal_id'] ?? item['episode'] ?? ''}')
+                  : null)
+              .whereType<int>()
+              .where((number) => number > 0 && number <= 500)
+              .toSet()
+              .toList()
+            ..sort();
+        } catch (_) {
+          // No secondary source responded.
+        }
       }
       if (episodeNumbers.isEmpty) {
         throw Exception(
-          'AniList, MyAnimeList and the streaming backend did not return an episode list.',
+          'AniList and the streaming backend did not return episode numbers.',
         );
       }
-    } else {
-      episodeNumbers = List<int>.generate(count, (index) => index + 1);
     }
 
-    // Kitsu supplies all display metadata, regardless of whether episode
-    // numbers came from AniList or the streaming backend.
+    // Episode numbering is already available. Kitsu enriches the rows, but
+    // its mapping/metadata requests are bounded so a slow Kitsu API cannot
+    // make the entire episode section fail.
     List<dynamic> kitsuEpisodes = const [];
     try {
-      kitsuEpisodes = await _getKitsuEpisodes('$id');
+      kitsuEpisodes = await _getKitsuEpisodes('$id')
+          .timeout(const Duration(seconds: 8));
     } catch (_) {
-      // Episode numbering remains usable when Kitsu is unavailable.
+      // Show numbered episodes with neutral fallback titles if Kitsu is slow.
     }
     final byNumber = <int, Map<String, dynamic>>{};
     for (final item in kitsuEpisodes) {
@@ -463,21 +477,20 @@ class AnimeApi {
       }
     }
 
-    // Keep provider IDs from the backend, but never use its display metadata.
+    // Provider IDs are optional and never supply display metadata.
     final backendIds = <int, String>{};
-    if (count == null || count < 1 || count > 500) {
-      try {
-        final backendEpisodes = await _getBackendEpisodes('$id');
-        for (final item in backendEpisodes) {
-          final number = int.tryParse('${item['number'] ?? ''}');
-          final providerId = item['id']?.toString();
-          if (number != null && providerId != null && providerId.isNotEmpty) {
-            backendIds[number] = providerId;
-          }
+    try {
+      final backendEpisodes = await _getBackendEpisodes('$id')
+          .timeout(fastTimeout);
+      for (final item in backendEpisodes) {
+        final number = int.tryParse('${item['number'] ?? ''}');
+        final providerId = item['id']?.toString();
+        if (number != null && providerId != null && providerId.isNotEmpty) {
+          backendIds[number] = providerId;
         }
-      } catch (_) {
-        // IDs are optional; the numbered episode list can still be shown.
       }
+    } catch (_) {
+      // The list remains usable without provider IDs.
     }
 
     return {
