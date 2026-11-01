@@ -154,7 +154,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
                         const SizedBox(height: 18),
                         _filterHeading('Year'),
                         DropdownButtonFormField<int?>(
-                          value: year,
+                          initialValue: year,
                           isExpanded: true,
                           decoration: const InputDecoration(
                             filled: true, border: OutlineInputBorder(),
