@@ -8,6 +8,9 @@ import '../models/anime.dart';
 class AnimeApi {
   static const _aniListUrl = 'https://graphql.anilist.co';
   static const _jikanUrl = 'https://api.jikan.moe/v4';
+  static final HttpClient _httpClient = HttpClient()
+    ..connectionTimeout = const Duration(seconds: 12)
+    ..idleTimeout = const Duration(seconds: 30);
 
   static const _mediaFields = '''
     id
@@ -32,12 +35,12 @@ class AnimeApi {
     Object? body,
     String accept = 'application/json',
   }) async {
-    final client = HttpClient()
-      ..connectionTimeout = const Duration(seconds: 15);
     try {
       final request =
-          await (method == 'POST' ? client.postUrl(uri) : client.getUrl(uri))
-              .timeout(const Duration(seconds: 15));
+          await (method == 'POST'
+                  ? _httpClient.postUrl(uri)
+                  : _httpClient.getUrl(uri))
+              .timeout(const Duration(seconds: 12));
       request.headers.set(HttpHeaders.acceptHeader, accept);
       request.headers.set(
         HttpHeaders.userAgentHeader,
@@ -48,9 +51,12 @@ class AnimeApi {
         request.write(jsonEncode(body));
       }
       final response = await request.close().timeout(
-        const Duration(seconds: 30),
+        const Duration(seconds: 15),
       );
-      final text = await response.transform(utf8.decoder).join();
+      final text = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(const Duration(seconds: 20));
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw HttpException(
           'API request failed (HTTP ${response.statusCode}). ${text.length > 240 ? text.substring(0, 240) : text}',
@@ -68,8 +74,6 @@ class AnimeApi {
         );
       }
       return decoded;
-    } finally {
-      client.close(force: true);
     }
   }
 
@@ -223,6 +227,7 @@ class AnimeApi {
         '''
         query (\$page: Int, \$after: Int, \$before: Int) {
           Page(page: \$page, perPage: 50) {
+            pageInfo { hasNextPage }
             airingSchedules(
               airingAt_greater: \$after,
               airingAt_lesser: \$before,
@@ -249,7 +254,10 @@ class AnimeApi {
           ? page['airingSchedules'] as List<dynamic>
           : const <dynamic>[];
       schedules.addAll(entries);
-      if (entries.length < 50) break;
+      final pageInfo = page is Map && page['pageInfo'] is Map
+          ? page['pageInfo'] as Map
+          : const {};
+      if (entries.isEmpty || pageInfo['hasNextPage'] != true) break;
     }
 
     return schedules;
@@ -552,7 +560,10 @@ class AnimeApi {
   }
 
   // Streaming is resolved through the user's configured AniScroll API server.
-  static const streamingBaseUrl = 'http://16.176.100.190:3000';
+  static const streamingBaseUrl = String.fromEnvironment(
+    'ANISCROLL_API_BASE_URL',
+    defaultValue: 'http://16.176.100.190:3000',
+  );
 
   static Future<dynamic> _streamRequest(String path) =>
       _request(Uri.parse('$streamingBaseUrl$path'));
@@ -608,6 +619,9 @@ class AnimeApi {
     for (final entry in <String, Future<dynamic> Function()>{
       'AniList': () => _aniList('query { Viewer { id } }'),
       'Jikan': () => _request(Uri.parse('$_jikanUrl/anime/1')),
+      'Streaming backend': () => _request(
+        Uri.parse('$streamingBaseUrl/api/health'),
+      ),
     }.entries) {
       try {
         await entry.value();
