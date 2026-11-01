@@ -57,7 +57,7 @@ class _DiscoverPageState extends State<DiscoverPage> {
       _error = null;
     });
     try {
-      var found = await AnimeApi.discover(
+      final found = await AnimeApi.discover(
         search: _query,
         genres: _genres,
         year: _year,
@@ -66,12 +66,6 @@ class _DiscoverPageState extends State<DiscoverPage> {
         status: _status,
         sort: _sort,
       );
-      // Retry without filters if the filtered request returns no results.
-      if (found.isEmpty &&
-          (_genres.isNotEmpty || _year != null || _season != null ||
-              _format != null || _status != null)) {
-        found = await AnimeApi.discover(search: _query, sort: _sort);
-      }
       if (!mounted || request != _requestId) return;
       setState(() {
         _results = found;
@@ -284,6 +278,14 @@ class _DiscoverPageState extends State<DiscoverPage> {
   }
 
   Future<void> _refresh() => _load();
+
+  @override
+  void dispose() {
+    _requestId++;
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
 
   @override
   void dispose() {
