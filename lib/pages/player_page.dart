@@ -702,36 +702,6 @@ class _PlayerPageState extends State<PlayerPage> {
                   ],
                 ),
               ),
-            if (ready)
-              Positioned(
-                top: 14,
-                left: 16,
-                right: 16,
-                child: IgnorePointer(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        _currentEpisodeTitle().isEmpty
-                            ? 'EPISODE ${widget.episode}'
-                            : 'EPISODE ${widget.episode}  •  ${_currentEpisodeTitle()}',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          shadows: [
-                            Shadow(color: Colors.black, blurRadius: 5),
-                            Shadow(color: Colors.black, blurRadius: 10),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             if (_selectedSubtitleIndex >= 0 && _subtitleCue.isNotEmpty)
               Positioned(
                 left: 18,
@@ -771,11 +741,17 @@ class _PlayerPageState extends State<PlayerPage> {
           children: [
             Row(
               children: [
-                Text(
-                  'EP ${widget.episode}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
+                Expanded(
+                  child: Text(
+                    _currentEpisodeTitle().isEmpty
+                        ? 'EPISODE ${widget.episode}'
+                        : 'EPISODE ${widget.episode} • ${_currentEpisodeTitle()}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 const Spacer(),
