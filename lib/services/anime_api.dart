@@ -115,20 +115,42 @@ class AnimeApi {
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final weekAgo = now - 7 * 24 * 60 * 60;
     final weekAhead = now + 7 * 24 * 60 * 60;
-    final data = await _aniList('''
-      query (\$after: Int, \$before: Int) {
-        Page(page: 1, perPage: 50) {
-          airingSchedules(airingAt_greater: \$after, airingAt_lesser: \$before, sort: TIME) {
-            airingAt episode
-            media { id idMal title { english romaji userPreferred } coverImage { large } format }
+    final schedules = <dynamic>[];
+
+    // AniList returns at most 50 entries per page. Fetch every page in the
+    // two-week window so older aired episodes cannot crowd out upcoming days.
+    for (var pageNumber = 1; pageNumber <= 20; pageNumber++) {
+      final data = await _aniList('''
+        query (\$page: Int, \$after: Int, \$before: Int) {
+          Page(page: \$page, perPage: 50) {
+            airingSchedules(
+              airingAt_greater: \$after,
+              airingAt_lesser: \$before,
+              sort: TIME
+            ) {
+              airingAt
+              episode
+              media {
+                id
+                idMal
+                title { english romaji userPreferred }
+                coverImage { large }
+                format
+              }
+            }
           }
         }
-      }
-    ''', {'after': weekAgo, 'before': weekAhead});
-    final page = data is Map ? data['Page'] : null;
-    return page is Map && page['airingSchedules'] is List
-        ? page['airingSchedules'] as List<dynamic>
-        : const [];
+      ''', {'page': pageNumber, 'after': weekAgo, 'before': weekAhead});
+
+      final page = data is Map ? data['Page'] : null;
+      final entries = page is Map && page['airingSchedules'] is List
+          ? page['airingSchedules'] as List<dynamic>
+          : const <dynamic>[];
+      schedules.addAll(entries);
+      if (entries.length < 50) break;
+    }
+
+    return schedules;
   }
 
   static Future<dynamic> topBanners() async => season();
