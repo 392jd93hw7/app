@@ -445,17 +445,10 @@ class _PlayerPageState extends State<PlayerPage> {
             ],
           ),
           PopupMenuButton<String>(
-            icon: const Icon(Icons.closed_caption_outlined),
-            onSelected: (value) {
-              if (value == 'audio') _switchType();
-              if (value == 'captions') {
-                setState(() => _subtitleTracks.isEmpty ? _error = 'No external subtitle tracks are currently attached to this player.' : _error = 'Subtitle track selection requires a player with external VTT track support.');
-              }
-            },
-            itemBuilder: (_) => [
-              PopupMenuItem(value: 'captions', child: Text('Subtitles (${_subtitleTracks.length} returned)')),
-              PopupMenuItem(value: 'audio', child: Text(_type == 'sub' ? 'Switch to dub' : 'Switch to sub')),
-            ],
+            icon: const Icon(Icons.audiotrack_outlined),
+            tooltip: 'Audio type',
+            onSelected: (_) => _switchType(),
+            itemBuilder: (_) => [PopupMenuItem(value: 'audio', child: Text(_type == 'sub' ? 'Switch to dub' : 'Switch to sub'))],
           ),
         ],
       ),
@@ -512,6 +505,16 @@ class _PlayerPageState extends State<PlayerPage> {
         Row(children: [
           Text('EP ${widget.episode}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           const Spacer(),
+          PopupMenuButton<int>(
+            tooltip: 'Subtitles',
+            icon: Icon(_selectedSubtitleIndex < 0 ? Icons.closed_caption_off_outlined : Icons.closed_caption, color: Colors.white),
+            onSelected: _selectSubtitle,
+            itemBuilder: (_) => [
+              const PopupMenuItem(value: -1, child: Text('Off')),
+              for (var i = 0; i < _subtitleTracks.length; i++)
+                PopupMenuItem(value: i, child: Text((_subtitleTracks[i]['lang'] ?? _subtitleTracks[i]['label'] ?? 'Subtitle ${i + 1}').toString())),
+            ],
+          ),
           PopupMenuButton<double>(
             initialValue: _speed,
             color: const Color(0xFF202033),
@@ -563,14 +566,9 @@ class _PlayerPageState extends State<PlayerPage> {
       const SizedBox(height: 4),
       Text('Episode ${widget.episode} • ${_currentServer ?? (_busy ? 'Connecting…' : 'No server selected')}',
         style: const TextStyle(color: appMuted)),
-      const SizedBox(height: 12),
-      Row(children: [
-        const Icon(Icons.subtitles_outlined, color: appPurple, size: 18),
-        const SizedBox(width: 8),
-        Expanded(child: Text('${_subtitleTracks.length} subtitle tracks returned • ${_type.toUpperCase()}',
-          style: const TextStyle(color: appMuted, fontSize: 12))),
-        TextButton(onPressed: _switchType, child: Text(_type.toUpperCase())),
-      ]),
+      const SizedBox(height: 8),
+      Text('${_subtitleTracks.length} subtitle tracks • ${_type.toUpperCase()}',
+        style: const TextStyle(color: appMuted, fontSize: 12)),
     ]),
   );
 }
