@@ -557,6 +557,68 @@ class _PlayerPageState extends State<PlayerPage> {
     ));
   }
 
+  Widget _buildEpisodeList() => Padding(
+    padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      const Text('Episodes', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 12),
+      if (_episodes.isEmpty)
+        FutureBuilder<dynamic>(
+          future: _episodesFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: appPurple)));
+            }
+            if (snapshot.hasError) return const Text('Episode list is unavailable.', style: TextStyle(color: appMuted));
+            return const Text('No episode details were returned.', style: TextStyle(color: appMuted));
+          },
+        )
+      else
+        ..._episodes.asMap().entries.map((entry) {
+          final item = entry.value;
+          final number = _episodeNumber(item, entry.key + 1);
+          final title = item is Map
+              ? (item['title'] ?? item['canonicalTitle'] ?? item['name'] ?? 'Episode $number').toString()
+              : 'Episode $number';
+          final thumbnail = item is Map
+              ? (item['thumbnail'] ?? item['image'] ?? item['thumbnailUrl'] ?? '').toString()
+              : '';
+          final playing = number == widget.episode;
+          return Card(
+            color: playing ? appPurple.withValues(alpha: .16) : const Color(0xFF10111C),
+            margin: const EdgeInsets.only(bottom: 9),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: thumbnail.startsWith('http')
+                    ? Image.network(thumbnail, width: 104, height: 62, fit: BoxFit.cover,
+                        errorBuilder: (_, _, _) => _episodeThumb(number))
+                    : _episodeThumb(number),
+              ),
+              title: Text(title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+              subtitle: playing
+                  ? const Text('NOW PLAYING', style: TextStyle(color: appPurple, fontSize: 11, fontWeight: FontWeight.bold))
+                  : Text('Episode $number', style: const TextStyle(color: appMuted, fontSize: 12)),
+              trailing: playing
+                  ? const Icon(Icons.equalizer, color: appPurple)
+                  : const Icon(Icons.play_circle_outline, color: appPurple),
+              onTap: playing ? null : () => Navigator.of(context).pushReplacement(MaterialPageRoute(
+                builder: (_) => PlayerPage(anime: widget.anime, episode: number),
+              )),
+            ),
+          );
+        }),
+    ]),
+  );
+
+  Widget _episodeThumb(int number) => Container(
+    width: 104, height: 62, color: appPurple.withValues(alpha: .14),
+    alignment: Alignment.center,
+    child: Text('EP $number', style: const TextStyle(color: appCyan, fontWeight: FontWeight.bold)),
+  );
+
   Widget _buildFooter() => Container(
     width: double.infinity,
     padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
@@ -571,4 +633,11 @@ class _PlayerPageState extends State<PlayerPage> {
         style: const TextStyle(color: appMuted, fontSize: 12)),
     ]),
   );
+}
+
+class _SubtitleCue {
+  const _SubtitleCue(this.start, this.end, this.text);
+  final Duration start;
+  final Duration end;
+  final String text;
 }
