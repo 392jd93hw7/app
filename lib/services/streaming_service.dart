@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import 'anime_api.dart';
 
 enum StreamFormat { hls, mp4 }
@@ -53,7 +55,9 @@ class StreamingService {
     for (final item in response['servers'] as List) {
       if (item is Map) {
         final name = (item['name'] ?? '').toString().trim();
-        if (name.isNotEmpty && seen.add(name)) {\n          result.add(StreamServer(name));\n        }
+        if (name.isNotEmpty && seen.add(name)) {
+          result.add(StreamServer(name));
+        }
       }
     }
     if (result.isEmpty) throw const FormatException('No streaming servers were returned.');
@@ -73,7 +77,9 @@ class StreamingService {
       episode: episode, type: type, server: server,
     ).timeout(requestTimeout);
     debugPrint('[API] Response received: resolve $server');
-    if (response is! Map) {\n      throw const FormatException('Watch API returned invalid JSON.');\n    }
+    if (response is! Map) {
+      throw const FormatException('Watch API returned invalid JSON.');
+    }
     if (response['iframeOnly'] == true) {
       throw const FormatException('This server is iframe-only; native playback is not supported.');
     }
