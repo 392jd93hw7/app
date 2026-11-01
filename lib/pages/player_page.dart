@@ -313,7 +313,7 @@ class _PlayerPageState extends State<PlayerPage> {
     final secondsParts = parts.last.split('.');
     final wholeSeconds = int.tryParse(secondsParts.first);
     final millis = secondsParts.length > 1
-        ? int.tryParse((secondsParts[1] + '000').substring(0, 3)) ?? 0 : 0;
+        ? int.tryParse(('${secondsParts[1]}000').substring(0, 3)) ?? 0 : 0;
     final minutes = int.tryParse(parts[parts.length - 2]);
     final hours = parts.length == 3 ? int.tryParse(parts[0]) ?? 0 : 0;
     if (wholeSeconds == null || minutes == null) return null;
