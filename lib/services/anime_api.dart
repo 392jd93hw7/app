@@ -35,46 +35,47 @@ class AnimeApi {
     Object? body,
     String accept = 'application/json',
   }) async {
-    try {
-      final request =
-          await (method == 'POST'
-                  ? _httpClient.postUrl(uri)
-                  : _httpClient.getUrl(uri))
-              .timeout(const Duration(seconds: 12));
-      request.headers.set(HttpHeaders.acceptHeader, accept);
-      request.headers.set(
-        HttpHeaders.userAgentHeader,
-        'AniScroll/1.0 (Flutter Android app)',
-      );
-      if (body != null) {
-        request.headers.contentType = ContentType.json;
-        request.write(jsonEncode(body));
-      }
-      final response = await request.close().timeout(
-        const Duration(seconds: 15),
-      );
-      final text = await response
-          .transform(utf8.decoder)
-          .join()
-          .timeout(const Duration(seconds: 20));
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException(
-          'API request failed (HTTP ${response.statusCode}). ${text.length > 240 ? text.substring(0, 240) : text}',
-          uri: uri,
-        );
-      }
-      if (text.isEmpty) return null;
-      final decoded = jsonDecode(text);
-      if (decoded is Map &&
-          decoded['errors'] is List &&
-          (decoded['errors'] as List).isNotEmpty) {
-        throw HttpException(
-          'AniList: ${(decoded['errors'] as List).map((e) => e is Map ? e['message'] : e).join('; ')}',
-          uri: uri,
-        );
-      }
-      return decoded;
+    final request = await (method == 'POST'
+            ? _httpClient.postUrl(uri)
+            : _httpClient.getUrl(uri))
+        .timeout(const Duration(seconds: 12));
+    request.headers.set(HttpHeaders.acceptHeader, accept);
+    request.headers.set(
+      HttpHeaders.userAgentHeader,
+      'AniScroll/1.0 (Flutter Android app)',
+    );
+    if (body != null) {
+      request.headers.contentType = ContentType.json;
+      request.write(jsonEncode(body));
     }
+
+    final response = await request.close().timeout(
+      const Duration(seconds: 15),
+    );
+    final responseText = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 20));
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final detail = responseText.length > 240
+          ? responseText.substring(0, 240)
+          : responseText;
+      throw HttpException(
+        'API request failed (HTTP ${response.statusCode}). $detail',
+        uri: uri,
+      );
+    }
+    if (responseText.isEmpty) return null;
+    final decoded = jsonDecode(responseText);
+    if (decoded is Map &&
+        decoded['errors'] is List &&
+        (decoded['errors'] as List).isNotEmpty) {
+      final messages = (decoded['errors'] as List)
+          .map((error) => error is Map ? error['message'] : error)
+          .join('; ');
+      throw HttpException('API error: $messages', uri: uri);
+    }
+    return decoded;
   }
 
   static Future<dynamic> _aniList(
