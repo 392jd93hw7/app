@@ -303,20 +303,72 @@ class AnimeApi {
     return episodes;
   }
 
+  static Future<List<dynamic>> _getMalEpisodes(String malId) async {
+    final episodes = <dynamic>[];
+    for (var page = 1; page <= 20; page++) {
+      final response = await _request(
+        Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(malId)}/episodes?page=$page'),
+      );
+      final pageItems = response is Map && response['data'] is List
+          ? response['data'] as List<dynamic>
+          : const <dynamic>[];
+      episodes.addAll(pageItems);
+      final pagination = response is Map && response['pagination'] is Map
+          ? response['pagination'] as Map
+          : const {};
+      if (pagination['has_next_page'] != true || pageItems.isEmpty) break;
+    }
+    return episodes;
+  }
+
   static Future<dynamic> getEpisodes({
     required String animeId,
     String source = 'anilist',
     String? malId,
   }) async {
-    final id = int.tryParse(animeId);
-    if (id == null) {
-      throw ArgumentError(
-        'A numeric AniList ID is required to load the episode list.',
-      );
+    final isMalSource = source.toLowerCase() == 'mal';
+    final resolvedMalId = (malId != null && malId.isNotEmpty)
+        ? malId
+        : (isMalSource ? animeId : '');
+
+    // MAL-backed entries must not pass their MAL ID to AniList as if it
+    // were an AniList media ID.
+    if (isMalSource && resolvedMalId.isNotEmpty) {
+      final malEpisodes = await _getMalEpisodes(resolvedMalId);
+      if (malEpisodes.isNotEmpty) {
+        return {
+          'data': malEpisodes.map((item) {
+            final episode = item is Map ? item : const {};
+            return {
+              'number': episode['mal_id'] ?? episode['episode'] ?? episode['episodeNumber'],
+              'title': episode['title'] ?? episode['title_japanese'] ?? episode['title_romanji'] ?? '',
+              'description': episode['synopsis'] ?? '',
+              'thumbnail': '',
+            };
+          }).toList(),
+        };
+      }
     }
 
-    // AniList is the source of truth for the episode count/number sequence.
-    // Kitsu enriches those numbered episodes with titles, thumbnails and synopsis.
+    final id = int.tryParse(animeId);
+    if (id == null || isMalSource) {
+      if (resolvedMalId.isNotEmpty) {
+        final malEpisodes = await _getMalEpisodes(resolvedMalId);
+        return {
+          'data': malEpisodes.map((item) {
+            final episode = item is Map ? item : const {};
+            return {
+              'number': episode['mal_id'] ?? episode['episode'] ?? episode['episodeNumber'],
+              'title': episode['title'] ?? episode['title_japanese'] ?? episode['title_romanji'] ?? '',
+              'description': episode['synopsis'] ?? '',
+              'thumbnail': '',
+            };
+          }).toList(),
+        };
+      }
+      throw ArgumentError('A numeric AniList ID or MAL ID is required to load episodes.');
+    }
+
     final data = await _aniList(
       '''
       query (\$id: Int) {
@@ -332,17 +384,33 @@ class AnimeApi {
     final count = media is Map
         ? int.tryParse('${media['episodes'] ?? ''}')
         : null;
+
+    // When AniList has no episode count, use Jikan if a MAL mapping exists.
     if (count == null || count < 1 || count > 500) {
-      throw Exception(
-        'AniList did not return a valid episode count for this anime.',
-      );
+      if (resolvedMalId.isNotEmpty) {
+        final malEpisodes = await _getMalEpisodes(resolvedMalId);
+        if (malEpisodes.isNotEmpty) {
+          return {
+            'data': malEpisodes.map((item) {
+              final episode = item is Map ? item : const {};
+              return {
+                'number': episode['mal_id'] ?? episode['episode'] ?? episode['episodeNumber'],
+                'title': episode['title'] ?? episode['title_japanese'] ?? episode['title_romanji'] ?? '',
+                'description': episode['synopsis'] ?? '',
+                'thumbnail': '',
+              };
+            }).toList(),
+          };
+        }
+      }
+      throw Exception('AniList and MyAnimeList did not return an episode count or episode list.');
     }
 
     List<dynamic> kitsuEpisodes = const [];
     try {
       kitsuEpisodes = await _getKitsuEpisodes('$id');
     } catch (_) {
-      // Keep the AniList episode list usable when Kitsu has no mapping or is down.
+      // AniList episode numbering remains usable when Kitsu is unavailable.
     }
     final byNumber = <int, Map<String, dynamic>>{};
     for (final item in kitsuEpisodes) {
