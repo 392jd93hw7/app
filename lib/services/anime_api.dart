@@ -4,7 +4,8 @@ import 'dart:io';
 import '../models/anime.dart';
 
 /// Client-side metadata API. AniList is the primary source and Jikan is the
-/// optional MyAnimeList metadata/episode source. No private backend is needed.
+/// optional MyAnimeList metadata/episode source. Streaming and provider episode
+/// resolution use the configured AniScroll backend.
 class AnimeApi {
   static const _aniListUrl = 'https://graphql.anilist.co';
   static const _jikanUrl = 'https://api.jikan.moe/v4';
