@@ -48,7 +48,7 @@ class _PlayerPageState extends State<PlayerPage> {
   String? _currentServer;
   String? _error;
   double _speed = 1;
-  double _volume = 1;
+  final double _volume = 1;
   Timer? _hideTimer;
   Timer? _bufferTimer;
   Duration _savedPosition = Duration.zero;
@@ -189,7 +189,7 @@ class _PlayerPageState extends State<PlayerPage> {
       if (value.isCompleted) {
         setState(() => _status = PlayerStatus.completed);
       } else if (value.isPlaying) {
-        if (_status != PlayerStatus.playing) setState(() => _status = PlayerStatus.playing);
+        if (_status != PlayerStatus.playing) {\n          setState(() => _status = PlayerStatus.playing);\n        }
         debugPrint('[PLAYER] Buffering ended / playback active');
       } else if (value.isInitialized && _status != PlayerStatus.paused) {
         setState(() => _status = PlayerStatus.ready);
@@ -240,7 +240,7 @@ class _PlayerPageState extends State<PlayerPage> {
     _type = _type == 'sub' ? 'dub' : 'sub';
     await old?.pause();
     await old?.dispose();
-    if (mounted) setState(() => _controller = null);
+    if (mounted) {\n      setState(() => _controller = null);\n    }
     await _loadServers();
   }
 
