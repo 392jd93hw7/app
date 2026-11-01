@@ -415,6 +415,7 @@ class AnimeApi {
     }
 
     List<int> episodeNumbers = [];
+    final backendIds = <int, String>{};
     if (count != null && count > 0 && count <= 500) {
       episodeNumbers = List<int>.generate(count, (index) => index + 1);
     } else {
@@ -423,6 +424,13 @@ class AnimeApi {
       try {
         final backendEpisodes = await _getBackendEpisodes('$id')
             .timeout(fastTimeout);
+        for (final item in backendEpisodes) {
+          final number = int.tryParse('${item['number'] ?? ''}');
+          final providerId = item['id']?.toString();
+          if (number != null && providerId != null && providerId.isNotEmpty) {
+            backendIds[number] = providerId;
+          }
+        }
         episodeNumbers = backendEpisodes
             .map((item) => int.tryParse('${item['number'] ?? ''}'))
             .whereType<int>()
@@ -475,22 +483,6 @@ class AnimeApi {
           byNumber.putIfAbsent(number, () => Map<String, dynamic>.from(item));
         }
       }
-    }
-
-    // Provider IDs are optional and never supply display metadata.
-    final backendIds = <int, String>{};
-    try {
-      final backendEpisodes = await _getBackendEpisodes('$id')
-          .timeout(fastTimeout);
-      for (final item in backendEpisodes) {
-        final number = int.tryParse('${item['number'] ?? ''}');
-        final providerId = item['id']?.toString();
-        if (number != null && providerId != null && providerId.isNotEmpty) {
-          backendIds[number] = providerId;
-        }
-      }
-    } catch (_) {
-      // The list remains usable without provider IDs.
     }
 
     return {
