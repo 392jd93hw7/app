@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +9,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../core/theme.dart';
 import '../models/anime.dart';
 import '../services/streaming_service.dart';
+import '../services/anime_api.dart';
 
 enum PlayerStatus {
   idle,
@@ -52,6 +54,11 @@ class _PlayerPageState extends State<PlayerPage> {
   Timer? _hideTimer;
   Timer? _bufferTimer;
   Duration _savedPosition = Duration.zero;
+  late Future<dynamic> _episodesFuture;
+  List<dynamic> _episodes = [];
+  int _selectedSubtitleIndex = -1;
+  String _subtitleCue = '';
+  List<_SubtitleCue> _subtitleCues = [];
 
   bool get _busy => {
     PlayerStatus.fetchingSource,
@@ -64,6 +71,8 @@ class _PlayerPageState extends State<PlayerPage> {
   void initState() {
     super.initState();
     WakelockPlus.enable();
+    _episodesFuture = AnimeApi.getEpisodes(animeId: widget.anime.id, source: widget.anime.source, malId: widget.anime.malId);
+    _episodesFuture.then((data) { if (mounted) setState(() => _episodes = AnimeApi.extractList(data)); }).catchError((_) {});
     _loadServers();
   }
 
@@ -173,6 +182,7 @@ class _PlayerPageState extends State<PlayerPage> {
       unawaited(_recoverToNext(next, generation, controller));
       return;
     }
+    _updateSubtitleCue(value.position);
     if (value.isBuffering) {
       if (_status != PlayerStatus.buffering) {
         setState(() => _status = PlayerStatus.buffering);
