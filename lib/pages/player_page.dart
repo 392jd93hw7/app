@@ -221,7 +221,9 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Future<void> _selectServer(int index) async {
-    if (index < 0 || index >= _servers.length || index == _selectedServer) return;
+    if (index < 0 || index >= _servers.length || index == _selectedServer) {
+      return;
+    }
     final old = _controller;
     _savedPosition = old?.value.position ?? Duration.zero;
     final generation = ++_generation;
