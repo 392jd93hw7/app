@@ -329,13 +329,12 @@ class AnimeApi {
     if (response is! Map || response['episodes'] is! List) {
       return const [];
     }
+    // This endpoint is used only for episode numbering and provider IDs.
+    // Kitsu remains the sole source for episode titles, descriptions and artwork.
     return (response['episodes'] as List).whereType<Map>().map((item) {
       return {
         'number': item['num'] ?? item['number'] ?? item['episode'],
-        'title': item['title'] ?? '',
-        'description': item['description'] ?? item['synopsis'] ?? '',
-        'thumbnail': item['thumbnail'] ?? item['image'] ?? '',
-        // Preserve the provider episode ID for future provider-aware playback.
+        // Preserve the provider episode ID for provider-aware playback.
         'id': item['id'],
       };
     }).toList();
@@ -405,6 +404,8 @@ class AnimeApi {
         ? int.tryParse('${media['episodes'] ?? ''}')
         : null;
 
+    var episodeNumbers = <int>[];
+
     // When AniList has no episode count, use Jikan if a MAL mapping exists.
     if (count == null || count < 1 || count > 500) {
       if (resolvedMalId.isNotEmpty) {
@@ -425,22 +426,32 @@ class AnimeApi {
       }
       try {
         final backendEpisodes = await _getBackendEpisodes('$id');
-        if (backendEpisodes.isNotEmpty) {
-          return {'data': backendEpisodes};
-        }
+        episodeNumbers = backendEpisodes
+            .map((item) => int.tryParse('${item['number'] ?? ''}'))
+            .whereType<int>()
+            .where((number) => number > 0 && number <= 500)
+            .toSet()
+            .toList()
+          ..sort();
       } catch (_) {
         // Continue to the final error if the streaming backend is unavailable.
       }
-      throw Exception(
-        'AniList, MyAnimeList and the streaming backend did not return an episode list.',
-      );
+      if (episodeNumbers.isEmpty) {
+        throw Exception(
+          'AniList, MyAnimeList and the streaming backend did not return an episode list.',
+        );
+      }
+    } else {
+      episodeNumbers = List<int>.generate(count, (index) => index + 1);
     }
 
+    // Kitsu supplies all display metadata, regardless of whether episode
+    // numbers came from AniList or the streaming backend.
     List<dynamic> kitsuEpisodes = const [];
     try {
       kitsuEpisodes = await _getKitsuEpisodes('$id');
     } catch (_) {
-      // AniList episode numbering remains usable when Kitsu is unavailable.
+      // Episode numbering remains usable when Kitsu is unavailable.
     }
     final byNumber = <int, Map<String, dynamic>>{};
     for (final item in kitsuEpisodes) {
@@ -451,9 +462,26 @@ class AnimeApi {
         }
       }
     }
+
+    // Keep provider IDs from the backend, but never use its display metadata.
+    final backendIds = <int, String>{};
+    if (count == null || count < 1 || count > 500) {
+      try {
+        final backendEpisodes = await _getBackendEpisodes('$id');
+        for (final item in backendEpisodes) {
+          final number = int.tryParse('${item['number'] ?? ''}');
+          final providerId = item['id']?.toString();
+          if (number != null && providerId != null && providerId.isNotEmpty) {
+            backendIds[number] = providerId;
+          }
+        }
+      } catch (_) {
+        // IDs are optional; the numbered episode list can still be shown.
+      }
+    }
+
     return {
-      'data': List.generate(count, (index) {
-        final number = index + 1;
+      'data': episodeNumbers.map((number) {
         final kitsu = byNumber[number] ?? const <String, dynamic>{};
         final title = (kitsu['title'] ?? '').toString().trim();
         return {
@@ -461,8 +489,9 @@ class AnimeApi {
           'title': title.isEmpty ? 'Episode $number' : title,
           'description': kitsu['description'] ?? '',
           'thumbnail': kitsu['thumbnail'] ?? '',
+          if (backendIds.containsKey(number)) 'id': backendIds[number],
         };
-      }),
+      }).toList(),
     };
   }
 
