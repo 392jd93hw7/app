@@ -44,6 +44,7 @@ class _PlayerPageState extends State<PlayerPage> {
   int _selectedServer = -1;
   int _generation = 0;
   bool _fullscreen = false;
+  bool _fillScreen = false;
   bool _controlsVisible = true;
   bool _muted = false;
   bool _switching = false;
@@ -602,16 +603,7 @@ class _PlayerPageState extends State<PlayerPage> {
               ],
             ),
       body: _fullscreen
-          ? SizedBox.expand(
-              child: Center(
-                child: AspectRatio(
-                  aspectRatio: (video?.value.aspectRatio ?? 0) > 0
-                      ? video!.value.aspectRatio
-                      : 16 / 9,
-                  child: _buildVideoSurface(video, ready),
-                ),
-              ),
-            )
+          ? SizedBox.expand(child: _buildVideoSurface(video, ready))
           : SafeArea(
               child: SingleChildScrollView(
                 child: Column(
@@ -627,21 +619,105 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 
   Widget _buildVideoSurface(VideoPlayerController? video, bool ready) {
+    final videoAspect = (video?.value.aspectRatio ?? 0) > 0
+        ? video!.value.aspectRatio
+        : 16 / 9;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _toggleControls,
-      child: AspectRatio(
-        aspectRatio: (video?.value.aspectRatio ?? 0) > 0
-            ? video!.value.aspectRatio
-            : 16 / 9,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            if (ready)
-              Positioned.fill(
-                child: VideoPlayer(video!),
-              )
-            else
+      child: _fullscreen
+          ? LayoutBuilder(
+              builder: (context, constraints) {
+                final viewportAspect =
+                    constraints.maxWidth / constraints.maxHeight;
+                final fillWidth = viewportAspect > videoAspect
+                    ? constraints.maxWidth
+                    : constraints.maxHeight * videoAspect;
+                final fillHeight = viewportAspect > videoAspect
+                    ? constraints.maxWidth / videoAspect
+                    : constraints.maxHeight;
+                return ClipRect(
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      if (ready)
+                        Positioned.fill(
+                          child: _fillScreen
+                              ? FittedBox(
+                                  fit: BoxFit.cover,
+                                  clipBehavior: Clip.hardEdge,
+                                  child: SizedBox(
+                                    width: fillWidth,
+                                    height: fillHeight,
+                                    child: VideoPlayer(video!),
+                                  ),
+                                )
+                              : Center(
+                                  child: AspectRatio(
+                                    aspectRatio: videoAspect,
+                                    child: VideoPlayer(video!),
+                                  ),
+                                ),
+                        )
+                      else
+                        const Center(
+                          child: Icon(
+                            Icons.play_circle_outline,
+                            color: Colors.white24,
+                            size: 76,
+                          ),
+                        ),
+                      if (_busy)
+                        const Center(
+                          child: CircularProgressIndicator(color: appPurple),
+                        ),
+                      if (_status == PlayerStatus.error)
+                        Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Text(
+                              _error ?? 'Playback unavailable',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      if (_selectedSubtitleIndex >= 0 && _subtitleCue.isNotEmpty)
+                        Positioned(
+                          left: 18,
+                          right: 18,
+                          bottom: 72,
+                          child: IgnorePointer(
+                            child: Text(
+                              _subtitleCue,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                shadows: [
+                                  Shadow(color: Colors.black, blurRadius: 5),
+                                  Shadow(color: Colors.black, blurRadius: 9),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      if (_controlsVisible && ready && !_busy)
+                        _buildControls(video!),
+                    ],
+                  ),
+                );
+              },
+            )
+          : AspectRatio(
+              aspectRatio: videoAspect,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (ready)
+                    Positioned.fill(child: VideoPlayer(video!))
+                  else
               const Center(
                 child: Icon(
                   Icons.play_circle_outline,
@@ -723,10 +799,11 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
                 ),
               ),
-            if (_controlsVisible && ready && !_busy) _buildControls(video!),
-          ],
-        ),
-      ),
+                  if (_controlsVisible && ready && !_busy)
+                    _buildControls(video!),
+                ],
+              ),
+            ),
     );
   }
 
@@ -883,6 +960,15 @@ class _PlayerPageState extends State<PlayerPage> {
                         color: Colors.white,
                       ),
                     ),
+                    if (_fullscreen)
+                      IconButton(
+                        tooltip: _fillScreen ? 'Original size' : 'Zoom to fill screen',
+                        onPressed: () => setState(() => _fillScreen = !_fillScreen),
+                        icon: Icon(
+                          _fillScreen ? Icons.zoom_out_map : Icons.zoom_in_map,
+                          color: Colors.white,
+                        ),
+                      ),
                     IconButton(
                       onPressed: _toggleFullscreen,
                       icon: Icon(
