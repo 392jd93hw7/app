@@ -72,15 +72,26 @@ class _PlayerPageState extends State<PlayerPage> {
   void initState() {
     super.initState();
     WakelockPlus.enable();
-    _episodesFuture = AnimeApi.getEpisodes(animeId: widget.anime.id, source: widget.anime.source, malId: widget.anime.malId);
-    _episodesFuture.then((data) { if (mounted) setState(() => _episodes = AnimeApi.extractList(data)); }).catchError((_) {});
+    _episodesFuture = AnimeApi.getEpisodes(
+      animeId: widget.anime.id,
+      source: widget.anime.source,
+      malId: widget.anime.malId,
+    );
+    _episodesFuture
+        .then((data) {
+          if (mounted) setState(() => _episodes = AnimeApi.extractList(data));
+        })
+        .catchError((_) {});
     _loadServers();
   }
 
   Future<void> _loadServers({int startAt = 0}) async {
     final generation = ++_generation;
     _failures.clear();
-    _setStatus(PlayerStatus.fetchingSource, message: 'Finding streaming servers…');
+    _setStatus(
+      PlayerStatus.fetchingSource,
+      message: 'Finding streaming servers…',
+    );
     try {
       final servers = await _streaming.getServers(
         animeId: widget.anime.id,
@@ -110,7 +121,10 @@ class _PlayerPageState extends State<PlayerPage> {
           server: server.name,
         );
         if (!_active(generation)) return false;
-        _setStatus(PlayerStatus.initializing, message: 'Initializing ${server.name}…');
+        _setStatus(
+          PlayerStatus.initializing,
+          message: 'Initializing ${server.name}…',
+        );
         await _startSource(source, i, generation);
         return true;
       } catch (error) {
@@ -120,22 +134,32 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     }
     if (_active(generation)) {
-      _fail(Exception([
-        'No available server could start playback.',
-        ..._failures,
-        'Direct M3U8 fallback is disabled.',
-      ].join('\n')));
+      _fail(
+        Exception(
+          [
+            'No available server could start playback.',
+            ..._failures,
+            'Direct M3U8 fallback is disabled.',
+          ].join('\n'),
+        ),
+      );
     }
     return false;
   }
 
-  Future<void> _startSource(ResolvedStream source, int index, int generation) async {
+  Future<void> _startSource(
+    ResolvedStream source,
+    int index,
+    int generation,
+  ) async {
     VideoPlayerController? next;
     try {
       next = VideoPlayerController.networkUrl(
         source.uri,
         httpHeaders: StreamingService.headers,
-        formatHint: source.format == StreamFormat.hls ? VideoFormat.hls : VideoFormat.other,
+        formatHint: source.format == StreamFormat.hls
+            ? VideoFormat.hls
+            : VideoFormat.other,
       );
       await next.initialize().timeout(const Duration(seconds: 35));
       if (!_active(generation)) {
@@ -147,7 +171,9 @@ class _PlayerPageState extends State<PlayerPage> {
       await next.setVolume(_muted ? 0 : _volume);
       final duration = next.value.duration;
       final restore = _savedPosition;
-      if (restore > Duration.zero && duration > Duration.zero && restore < duration) {
+      if (restore > Duration.zero &&
+          duration > Duration.zero &&
+          restore < duration) {
         await next.seekTo(restore);
       }
 
@@ -194,7 +220,9 @@ class _PlayerPageState extends State<PlayerPage> {
       }
       _bufferTimer?.cancel();
       _bufferTimer = Timer(const Duration(seconds: 25), () {
-        if (_active(generation) && identical(_controller, controller) && controller.value.isBuffering) {
+        if (_active(generation) &&
+            identical(_controller, controller) &&
+            controller.value.isBuffering) {
           _recoverToNext(_selectedServer + 1, generation, controller);
         }
       });
@@ -254,7 +282,11 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Future<void> _selectSubtitle(int index) async {
     if (index < 0 || index >= _subtitleTracks.length) {
-      setState(() { _selectedSubtitleIndex = -1; _subtitleCue = ''; _subtitleCues = []; });
+      setState(() {
+        _selectedSubtitleIndex = -1;
+        _subtitleCue = '';
+        _subtitleCues = [];
+      });
       return;
     }
     final url = (_subtitleTracks[index]['url'] ?? '').toString();
@@ -262,13 +294,20 @@ class _PlayerPageState extends State<PlayerPage> {
       return;
     }
     try {
-      final client = HttpClient()..connectionTimeout = const Duration(seconds: 12);
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 12);
       try {
-        final request = await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 15));
+        final request = await client
+            .getUrl(Uri.parse(url))
+            .timeout(const Duration(seconds: 15));
         request.headers.set(HttpHeaders.userAgentHeader, 'AniScroll/1.0');
-        final response = await request.close().timeout(const Duration(seconds: 20));
+        final response = await request.close().timeout(
+          const Duration(seconds: 20),
+        );
         if (response.statusCode < 200 || response.statusCode >= 300) {
-          throw HttpException('Subtitle request failed (${response.statusCode}).');
+          throw HttpException(
+            'Subtitle request failed (${response.statusCode}).',
+          );
         }
         final content = await response.transform(const Utf8Decoder()).join();
         final cues = _parseVtt(content);
@@ -284,7 +323,9 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = 'Could not load subtitles: ${_errorText(error)}');
+        setState(
+          () => _error = 'Could not load subtitles: ${_errorText(error)}',
+        );
       }
     }
   }
@@ -293,7 +334,11 @@ class _PlayerPageState extends State<PlayerPage> {
     final result = <_SubtitleCue>[];
     final blocks = content.replaceAll('\r', '').split(RegExp(r'\n\s*\n'));
     for (final block in blocks) {
-      final lines = block.split('\n').map((line) => line.trim()).where((line) => line.isNotEmpty).toList();
+      final lines = block
+          .split('\n')
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList();
       final timingIndex = lines.indexWhere((line) => line.contains('-->'));
       if (timingIndex < 0 || timingIndex + 1 >= lines.length) continue;
       final times = lines[timingIndex].split('-->');
@@ -301,9 +346,13 @@ class _PlayerPageState extends State<PlayerPage> {
       final start = _parseVttTime(times[0].trim());
       final end = _parseVttTime(times[1].trim().split(RegExp(r'\s+')).first);
       if (start == null || end == null) continue;
-      final text = lines.skip(timingIndex + 1).join('\n')
+      final text = lines
+          .skip(timingIndex + 1)
+          .join('\n')
           .replaceAll(RegExp(r'<[^>]*>'), '')
-          .replaceAll('&amp;', '&').replaceAll('&lt;', '<').replaceAll('&gt;', '>');
+          .replaceAll('&amp;', '&')
+          .replaceAll('&lt;', '<')
+          .replaceAll('&gt;', '>');
       if (text.isNotEmpty) result.add(_SubtitleCue(start, end, text));
     }
     return result;
@@ -315,19 +364,27 @@ class _PlayerPageState extends State<PlayerPage> {
     final secondsParts = parts.last.split('.');
     final wholeSeconds = int.tryParse(secondsParts.first);
     final millis = secondsParts.length > 1
-        ? int.tryParse(('${secondsParts[1]}000').substring(0, 3)) ?? 0 : 0;
+        ? int.tryParse(('${secondsParts[1]}000').substring(0, 3)) ?? 0
+        : 0;
     final minutes = int.tryParse(parts[parts.length - 2]);
     final hours = parts.length == 3 ? int.tryParse(parts[0]) ?? 0 : 0;
     if (wholeSeconds == null || minutes == null) return null;
-    return Duration(hours: hours, minutes: minutes, seconds: wholeSeconds, milliseconds: millis);
+    return Duration(
+      hours: hours,
+      minutes: minutes,
+      seconds: wholeSeconds,
+      milliseconds: millis,
+    );
   }
 
   void _updateSubtitleCue(Duration position) {
     if (_selectedSubtitleIndex < 0 || _subtitleCues.isEmpty) {
       return;
     }
-    final cue = _subtitleCues.where((item) => position >= item.start && position <= item.end)
-        .map((item) => item.text).firstWhere((text) => true, orElse: () => '');
+    final cue = _subtitleCues
+        .where((item) => position >= item.start && position <= item.end)
+        .map((item) => item.text)
+        .firstWhere((text) => true, orElse: () => '');
     if (cue != _subtitleCue && mounted) {
       setState(() => _subtitleCue = cue);
     }
@@ -335,7 +392,15 @@ class _PlayerPageState extends State<PlayerPage> {
 
   int _episodeNumber(dynamic item, int fallback) {
     if (item is Map) {
-      return int.tryParse((item['number'] ?? item['episode'] ?? item['ep'] ?? item['episodeNumber'] ?? fallback).toString()) ?? fallback;
+      return int.tryParse(
+            (item['number'] ??
+                    item['episode'] ??
+                    item['ep'] ??
+                    item['episodeNumber'] ??
+                    fallback)
+                .toString(),
+          ) ??
+          fallback;
     }
     return fallback;
   }
@@ -411,10 +476,14 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Future<void> _toggleFullscreen() async {
     final value = !_fullscreen;
-    await SystemChrome.setEnabledSystemUIMode(value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge);
-    await SystemChrome.setPreferredOrientations(value
-        ? [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
-        : [DeviceOrientation.portraitUp]);
+    await SystemChrome.setEnabledSystemUIMode(
+      value ? SystemUiMode.immersiveSticky : SystemUiMode.edgeToEdge,
+    );
+    await SystemChrome.setPreferredOrientations(
+      value
+          ? [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+          : [DeviceOrientation.portraitUp],
+    );
     if (mounted) setState(() => _fullscreen = value);
   }
 
@@ -443,30 +512,55 @@ class _PlayerPageState extends State<PlayerPage> {
     final ready = video?.value.isInitialized ?? false;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: _fullscreen ? null : AppBar(
-        backgroundColor: Colors.black,
-        title: Text(widget.anime.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-        actions: [
-          if (_servers.isNotEmpty) PopupMenuButton<int>(
-            tooltip: 'Change server',
-            icon: const Icon(Icons.dns_outlined),
-            onSelected: _selectServer,
-            itemBuilder: (_) => [
-              for (var i = 0; i < _servers.length; i++)
-                PopupMenuItem(value: i, child: Row(children: [
-                  if (i == _selectedServer) const Icon(Icons.check, color: appPurple, size: 18),
-                  const SizedBox(width: 8), Text(_servers[i].name),
-                ])),
-            ],
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.audiotrack_outlined),
-            tooltip: 'Audio type',
-            onSelected: (_) => _switchType(),
-            itemBuilder: (_) => [PopupMenuItem(value: 'audio', child: Text(_type == 'sub' ? 'Switch to dub' : 'Switch to sub'))],
-          ),
-        ],
-      ),
+      appBar: _fullscreen
+          ? null
+          : AppBar(
+              backgroundColor: Colors.black,
+              title: Text(
+                widget.anime.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              actions: [
+                if (_servers.isNotEmpty)
+                  PopupMenuButton<int>(
+                    tooltip: 'Change server',
+                    icon: const Icon(Icons.dns_outlined),
+                    onSelected: _selectServer,
+                    itemBuilder: (_) => [
+                      for (var i = 0; i < _servers.length; i++)
+                        PopupMenuItem(
+                          value: i,
+                          child: Row(
+                            children: [
+                              if (i == _selectedServer)
+                                const Icon(
+                                  Icons.check,
+                                  color: appPurple,
+                                  size: 18,
+                                ),
+                              const SizedBox(width: 8),
+                              Text(_servers[i].name),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.audiotrack_outlined),
+                  tooltip: 'Audio type',
+                  onSelected: (_) => _switchType(),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'audio',
+                      child: Text(
+                        _type == 'sub' ? 'Switch to dub' : 'Switch to sub',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
       body: _fullscreen
           ? SizedBox.expand(
               child: Center(
@@ -523,10 +617,10 @@ class _PlayerPageState extends State<PlayerPage> {
                     _status.name == 'validatingSource'
                         ? 'Validating stream…'
                         : _status.name == 'initializing'
-                            ? 'Initializing player…'
-                            : _status.name == 'buffering'
-                                ? 'Buffering…'
-                                : 'Connecting…',
+                        ? 'Initializing player…'
+                        : _status.name == 'buffering'
+                        ? 'Buffering…'
+                        : 'Connecting…',
                     style: const TextStyle(color: Colors.white70),
                   ),
                 ],
@@ -587,8 +681,7 @@ class _PlayerPageState extends State<PlayerPage> {
                   ),
                 ),
               ),
-            if (_controlsVisible && ready && !_busy)
-              _buildControls(video!),
+            if (_controlsVisible && ready && !_busy) _buildControls(video!),
           ],
         ),
       ),
@@ -597,141 +690,301 @@ class _PlayerPageState extends State<PlayerPage> {
 
   Widget _buildControls(VideoPlayerController video) {
     final value = video.value;
-    return Positioned.fill(child: Container(
-      color: Colors.black.withValues(alpha: 0.28),
-      padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
-      child: Column(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Row(children: [
-          Text('EP ${widget.episode}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          const Spacer(),
-          PopupMenuButton<int>(
-            tooltip: 'Subtitles',
-            icon: Icon(_selectedSubtitleIndex < 0 ? Icons.closed_caption_off_outlined : Icons.closed_caption, color: Colors.white),
-            onSelected: _selectSubtitle,
-            itemBuilder: (_) => [
-              const PopupMenuItem(value: -1, child: Text('Off')),
-              for (var i = 0; i < _subtitleTracks.length; i++)
-                PopupMenuItem(value: i, child: Text((_subtitleTracks[i]['lang'] ?? _subtitleTracks[i]['label'] ?? 'Subtitle ${i + 1}').toString())),
-            ],
-          ),
-          PopupMenuButton<double>(
-            initialValue: _speed,
-            color: const Color(0xFF202033),
-            onSelected: (speed) async {
-              setState(() => _speed = speed);
-              await video.setPlaybackSpeed(speed);
-            },
-            itemBuilder: (_) => [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
-                .map((speed) => PopupMenuItem(value: speed, child: Text('${speed}x', style: const TextStyle(color: Colors.white)))).toList(),
-            child: Text('${_speed}x', style: const TextStyle(color: Colors.white)),
-          ),
-          IconButton(
-            tooltip: _muted ? 'Unmute' : 'Mute',
-            onPressed: () async {
-              _muted = !_muted;
-              await video.setVolume(_muted ? 0 : _volume);
-              if (mounted) setState(() {});
-            },
-            icon: Icon(_muted ? Icons.volume_off : Icons.volume_up, color: Colors.white),
-          ),
-        ]),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          IconButton(onPressed: () => video.seekTo(value.position - const Duration(seconds: 10)), icon: const Icon(Icons.replay_10, color: Colors.white, size: 34)),
-          const SizedBox(width: 24),
-          IconButton(onPressed: _togglePlay, iconSize: 58, icon: Icon(value.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_fill, color: Colors.white)),
-          const SizedBox(width: 24),
-          IconButton(onPressed: () => video.seekTo(value.position + const Duration(seconds: 10)), icon: const Icon(Icons.forward_10, color: Colors.white, size: 34)),
-        ]),
-        Column(children: [
-          VideoProgressIndicator(video, allowScrubbing: true, padding: const EdgeInsets.symmetric(vertical: 8),
-            colors: const VideoProgressColors(playedColor: appPurple, bufferedColor: Colors.white38, backgroundColor: Colors.white12)),
-          Row(children: [
-            Text(_time(value.position), style: const TextStyle(color: Colors.white, fontSize: 11)),
-            const Spacer(),
-            Text(_time(value.duration), style: const TextStyle(color: Colors.white, fontSize: 11)),
-            IconButton(onPressed: _toggleFullscreen, icon: Icon(_fullscreen ? Icons.fullscreen_exit : Icons.fullscreen, color: Colors.white)),
-          ]),
-        ]),
-      ]),
-    ));
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.28),
+        padding: const EdgeInsets.fromLTRB(18, 12, 18, 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'EP ${widget.episode}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                PopupMenuButton<int>(
+                  tooltip: 'Subtitles',
+                  icon: Icon(
+                    _selectedSubtitleIndex < 0
+                        ? Icons.closed_caption_off_outlined
+                        : Icons.closed_caption,
+                    color: Colors.white,
+                  ),
+                  onSelected: _selectSubtitle,
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(value: -1, child: Text('Off')),
+                    for (var i = 0; i < _subtitleTracks.length; i++)
+                      PopupMenuItem(
+                        value: i,
+                        child: Text(
+                          (_subtitleTracks[i]['lang'] ??
+                                  _subtitleTracks[i]['label'] ??
+                                  'Subtitle ${i + 1}')
+                              .toString(),
+                        ),
+                      ),
+                  ],
+                ),
+                PopupMenuButton<double>(
+                  initialValue: _speed,
+                  color: const Color(0xFF202033),
+                  onSelected: (speed) async {
+                    setState(() => _speed = speed);
+                    await video.setPlaybackSpeed(speed);
+                  },
+                  itemBuilder: (_) => [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
+                      .map(
+                        (speed) => PopupMenuItem(
+                          value: speed,
+                          child: Text(
+                            '${speed}x',
+                            style: const TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                  child: Text(
+                    '${_speed}x',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+                IconButton(
+                  tooltip: _muted ? 'Unmute' : 'Mute',
+                  onPressed: () async {
+                    _muted = !_muted;
+                    await video.setVolume(_muted ? 0 : _volume);
+                    if (mounted) setState(() {});
+                  },
+                  icon: Icon(
+                    _muted ? Icons.volume_off : Icons.volume_up,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                IconButton(
+                  onPressed: () => video.seekTo(
+                    value.position - const Duration(seconds: 10),
+                  ),
+                  icon: const Icon(
+                    Icons.replay_10,
+                    color: Colors.white,
+                    size: 34,
+                  ),
+                ),
+                const SizedBox(width: 24),
+                IconButton(
+                  onPressed: _togglePlay,
+                  iconSize: 58,
+                  icon: Icon(
+                    value.isPlaying
+                        ? Icons.pause_circle_filled
+                        : Icons.play_circle_fill,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 24),
+                IconButton(
+                  onPressed: () => video.seekTo(
+                    value.position + const Duration(seconds: 10),
+                  ),
+                  icon: const Icon(
+                    Icons.forward_10,
+                    color: Colors.white,
+                    size: 34,
+                  ),
+                ),
+              ],
+            ),
+            Column(
+              children: [
+                VideoProgressIndicator(
+                  video,
+                  allowScrubbing: true,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  colors: const VideoProgressColors(
+                    playedColor: appPurple,
+                    bufferedColor: Colors.white38,
+                    backgroundColor: Colors.white12,
+                  ),
+                ),
+                Row(
+                  children: [
+                    Text(
+                      _time(value.position),
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
+                    const Spacer(),
+                    Text(
+                      _time(value.duration),
+                      style: const TextStyle(color: Colors.white, fontSize: 11),
+                    ),
+                    IconButton(
+                      onPressed: _toggleFullscreen,
+                      icon: Icon(
+                        _fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildEpisodeList() => Padding(
     padding: const EdgeInsets.fromLTRB(16, 18, 16, 24),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('Episodes', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-      const SizedBox(height: 12),
-      if (_episodes.isEmpty)
-        FutureBuilder<dynamic>(
-          future: _episodesFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator(color: appPurple)));
-            }
-            if (snapshot.hasError) {
-              return const Text('Episode list is unavailable.', style: TextStyle(color: appMuted));
-            }
-            return const Text('No episode details were returned.', style: TextStyle(color: appMuted));
-          },
-        )
-      else
-        ..._episodes.asMap().entries.map((entry) {
-          final item = entry.value;
-          final number = _episodeNumber(item, entry.key + 1);
-          final title = item is Map
-              ? (item['title'] ?? item['canonicalTitle'] ?? item['name'] ?? 'Episode $number').toString()
-              : 'Episode $number';
-          final thumbnail = item is Map
-              ? (item['thumbnail'] ?? item['image'] ?? item['thumbnailUrl'] ?? '').toString()
-              : '';
-          final playing = number == widget.episode;
-          return Card(
-            color: playing ? appPurple.withValues(alpha: .16) : const Color(0xFF10111C),
-            margin: const EdgeInsets.only(bottom: 9),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              leading: ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: thumbnail.startsWith('http')
-                    ? Image.network(thumbnail, width: 104, height: 62, fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => _episodeThumb(number))
-                    : _episodeThumb(number),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Episodes',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        if (_episodes.isEmpty)
+          FutureBuilder<dynamic>(
+            future: _episodesFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(20),
+                    child: CircularProgressIndicator(color: appPurple),
+                  ),
+                );
+              }
+              if (snapshot.hasError) {
+                return const Text(
+                  'Episode list is unavailable.',
+                  style: TextStyle(color: appMuted),
+                );
+              }
+              return const Text(
+                'No episode details were returned.',
+                style: TextStyle(color: appMuted),
+              );
+            },
+          )
+        else
+          ..._episodes.asMap().entries.map((entry) {
+            final item = entry.value;
+            final number = _episodeNumber(item, entry.key + 1);
+            final title = item is Map
+                ? (item['title'] ??
+                          item['canonicalTitle'] ??
+                          item['name'] ??
+                          'Episode $number')
+                      .toString()
+                : 'Episode $number';
+            final thumbnail = item is Map
+                ? (item['thumbnail'] ??
+                          item['image'] ??
+                          item['thumbnailUrl'] ??
+                          '')
+                      .toString()
+                : '';
+            final playing = number == widget.episode;
+            return Card(
+              color: playing
+                  ? appPurple.withValues(alpha: .16)
+                  : const Color(0xFF10111C),
+              margin: const EdgeInsets.only(bottom: 9),
+              child: ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: thumbnail.startsWith('http')
+                      ? Image.network(
+                          thumbnail,
+                          width: 104,
+                          height: 62,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, _, _) => _episodeThumb(number),
+                        )
+                      : _episodeThumb(number),
+                ),
+                title: Text(
+                  playing ? 'NOW PLAYING' : title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: playing ? appPurple : null,
+                  ),
+                ),
+                subtitle: Text(
+                  'Episode $number',
+                  style: const TextStyle(color: appMuted, fontSize: 12),
+                ),
+                trailing: playing
+                    ? const Icon(Icons.equalizer, color: appPurple)
+                    : const Icon(Icons.play_circle_outline, color: appPurple),
+                onTap: playing
+                    ? null
+                    : () => Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              PlayerPage(anime: widget.anime, episode: number),
+                        ),
+                      ),
               ),
-              title: Text(playing ? 'NOW PLAYING' : title, maxLines: 2, overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14,
-                  color: playing ? appPurple : null)),
-              subtitle: Text('Episode $number', style: const TextStyle(color: appMuted, fontSize: 12)),
-              trailing: playing
-                  ? const Icon(Icons.equalizer, color: appPurple)
-                  : const Icon(Icons.play_circle_outline, color: appPurple),
-              onTap: playing ? null : () => Navigator.of(context).pushReplacement(MaterialPageRoute(
-                builder: (_) => PlayerPage(anime: widget.anime, episode: number),
-              )),
-            ),
-          );
-        }),
-    ]),
+            );
+          }),
+      ],
+    ),
   );
 
   Widget _episodeThumb(int number) => Container(
-    width: 104, height: 62, color: appPurple.withValues(alpha: .14),
+    width: 104,
+    height: 62,
+    color: appPurple.withValues(alpha: .14),
     alignment: Alignment.center,
-    child: Text('EP $number', style: const TextStyle(color: appCyan, fontWeight: FontWeight.bold)),
+    child: Text(
+      'EP $number',
+      style: const TextStyle(color: appCyan, fontWeight: FontWeight.bold),
+    ),
   );
 
   Widget _buildFooter() => Container(
     width: double.infinity,
     padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
     color: const Color(0xFF10111C),
-    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(widget.anime.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-      const SizedBox(height: 4),
-      Text('Episode ${widget.episode} • ${_currentServer ?? (_busy ? 'Connecting…' : 'No server selected')}',
-        style: const TextStyle(color: appMuted)),
-      const SizedBox(height: 8),
-      Text('${_subtitleTracks.length} subtitle tracks • ${_type.toUpperCase()}',
-        style: const TextStyle(color: appMuted, fontSize: 12)),
-    ]),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          widget.anime.title,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Episode ${widget.episode} • ${_currentServer ?? (_busy ? 'Connecting…' : 'No server selected')}',
+          style: const TextStyle(color: appMuted),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          '${_subtitleTracks.length} subtitle tracks • ${_type.toUpperCase()}',
+          style: const TextStyle(color: appMuted, fontSize: 12),
+        ),
+      ],
+    ),
   );
 }
 

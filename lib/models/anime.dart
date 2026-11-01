@@ -24,29 +24,64 @@ class Anime {
   factory Anime.fromJson(Map<String, dynamic> j) {
     final rawTitle = j['title'] ?? j['titles'];
     final title = rawTitle is Map
-        ? (rawTitle['english'] ?? rawTitle['romaji'] ?? rawTitle['userPreferred'] ?? rawTitle['name'] ?? rawTitle['native'] ?? 'Anime').toString()
+        ? (rawTitle['english'] ??
+                  rawTitle['romaji'] ??
+                  rawTitle['userPreferred'] ??
+                  rawTitle['name'] ??
+                  rawTitle['native'] ??
+                  'Anime')
+              .toString()
         : (rawTitle ?? j['name'] ?? j['englishTitle'] ?? 'Anime').toString();
     final cover = j['coverImage'] ?? j['cover_image'];
-    final coverUrl = cover is Map ? (cover['extraLarge'] ?? cover['large'] ?? cover['medium']) : cover;
+    final coverUrl = cover is Map
+        ? (cover['extraLarge'] ?? cover['large'] ?? cover['medium'])
+        : cover;
     final bannerValue = j['bannerImage'] ?? j['banner'] ?? j['backdrop'];
-    final image = j['image'] ?? j['poster'] ?? j['posterUrl'] ?? j['thumbnail'] ?? j['cover'] ?? coverUrl ?? '';
-    final id = j['anilistId'] ?? j['aniListId'] ?? j['id'] ?? j['malId'] ?? j['mal_id'] ?? title;
-    final score = j['score'] ?? j['averageScore'] ?? j['mean'] ?? j['rating'] ?? '—';
-    final yearValue = j['year'] ?? j['seasonYear'] ?? j['startDate']?['year'] ?? '';
+    final image =
+        j['image'] ??
+        j['poster'] ??
+        j['posterUrl'] ??
+        j['thumbnail'] ??
+        j['cover'] ??
+        coverUrl ??
+        '';
+    final id =
+        j['anilistId'] ??
+        j['aniListId'] ??
+        j['id'] ??
+        j['malId'] ??
+        j['mal_id'] ??
+        title;
+    final score =
+        j['score'] ?? j['averageScore'] ?? j['mean'] ?? j['rating'] ?? '—';
+    final yearValue =
+        j['year'] ?? j['seasonYear'] ?? j['startDate']?['year'] ?? '';
     final synopsis = j['synopsis'] ?? j['description'] ?? j['overview'] ?? '';
     final genresValue = j['genres'] ?? j['genre'];
     return Anime(
-      id.toString(), title, image.toString(),
+      id.toString(),
+      title,
+      image.toString(),
       score: score.toString(),
       year: yearValue.toString(),
       synopsis: synopsis.toString(),
-      genres: genresValue is List ? genresValue.map((e) => e is Map ? (e['name'] ?? '').toString() : e.toString()).where((e) => e.isNotEmpty).toList() : const [],
+      genres: genresValue is List
+          ? genresValue
+                .map(
+                  (e) => e is Map ? (e['name'] ?? '').toString() : e.toString(),
+                )
+                .where((e) => e.isNotEmpty)
+                .toList()
+          : const [],
       banner: (bannerValue ?? '').toString(),
-      source: (j['source'] ?? (j['malId'] != null ? 'mal' : 'anilist')).toString(),
+      source: (j['source'] ?? (j['malId'] != null ? 'mal' : 'anilist'))
+          .toString(),
       malId: (j['malId'] ?? j['mal_id'] ?? j['idMal'] ?? '').toString(),
       format: (j['format'] ?? j['type'] ?? '').toString(),
       status: (j['status'] ?? '').toString(),
-      episodeCount: int.tryParse((j['episodes'] ?? j['episodeCount'] ?? '').toString()),
+      episodeCount: int.tryParse(
+        (j['episodes'] ?? j['episodeCount'] ?? '').toString(),
+      ),
       popularity: int.tryParse((j['popularity'] ?? '').toString()),
     );
   }

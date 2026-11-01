@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../core/theme.dart';
 import '../models/anime.dart';
 import 'home_page.dart';
@@ -32,17 +33,27 @@ class _MainShellState extends State<MainShell> {
   }
 
   void open(Anime anime) {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => AnimeDetailPage(
-      anime: anime,
-      isSaved: saved.any((item) => item.id == anime.id),
-      onSave: () => toggle(anime),
-      onPlay: (episode) {
-        if (!history.any((item) => item.id == anime.id)) {
-          setState(() => history.insert(0, anime));
-        }
-        Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(anime: anime, episode: episode)));
-      },
-    )));
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AnimeDetailPage(
+          anime: anime,
+          isSaved: saved.any((item) => item.id == anime.id),
+          onSave: () => toggle(anime),
+          onPlay: (episode) {
+            if (!history.any((item) => item.id == anime.id)) {
+              setState(() => history.insert(0, anime));
+            }
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => PlayerPage(anime: anime, episode: episode),
+              ),
+            );
+          },
+        ),
+      ),
+    );
   }
 
   @override
@@ -52,7 +63,11 @@ class _MainShellState extends State<MainShell> {
       DiscoverPage(onOpen: open),
       const SchedulePage(),
       WatchlistPage(items: saved, onOpen: open, onRemove: toggle),
-      ProfilePage(profile: profile, history: history, onProfile: (value) => setState(() => profile = value)),
+      ProfilePage(
+        profile: profile,
+        history: history,
+        onProfile: (value) => setState(() => profile = value),
+      ),
     ];
     return Scaffold(
       body: IndexedStack(index: tab, children: pages),
@@ -63,11 +78,31 @@ class _MainShellState extends State<MainShell> {
         selectedIndex: tab,
         onDestinationSelected: (index) => setState(() => tab = index),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Discover'),
-          NavigationDestination(icon: Icon(Icons.calendar_month_outlined), selectedIcon: Icon(Icons.calendar_month), label: 'Schedule'),
-          NavigationDestination(icon: Icon(Icons.bookmark_border), selectedIcon: Icon(Icons.bookmark), label: 'Watchlist'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.explore_outlined),
+            selectedIcon: Icon(Icons.explore),
+            label: 'Discover',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.calendar_month_outlined),
+            selectedIcon: Icon(Icons.calendar_month),
+            label: 'Schedule',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bookmark_border),
+            selectedIcon: Icon(Icons.bookmark),
+            label: 'Watchlist',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.person),
+            label: 'Profile',
+          ),
         ],
       ),
     );

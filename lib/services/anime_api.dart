@@ -26,26 +26,46 @@ class AnimeApi {
     nextAiringEpisode { airingAt episode }
   ''';
 
-  static Future<dynamic> _request(Uri uri, {String method = 'GET', Object? body, String accept = 'application/json'}) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+  static Future<dynamic> _request(
+    Uri uri, {
+    String method = 'GET',
+    Object? body,
+    String accept = 'application/json',
+  }) async {
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 15);
     try {
-      final request = await (method == 'POST' ? client.postUrl(uri) : client.getUrl(uri))
-          .timeout(const Duration(seconds: 15));
+      final request =
+          await (method == 'POST' ? client.postUrl(uri) : client.getUrl(uri))
+              .timeout(const Duration(seconds: 15));
       request.headers.set(HttpHeaders.acceptHeader, accept);
-      request.headers.set(HttpHeaders.userAgentHeader, 'AniScroll/1.0 (Flutter Android app)');
+      request.headers.set(
+        HttpHeaders.userAgentHeader,
+        'AniScroll/1.0 (Flutter Android app)',
+      );
       if (body != null) {
         request.headers.contentType = ContentType.json;
         request.write(jsonEncode(body));
       }
-      final response = await request.close().timeout(const Duration(seconds: 30));
+      final response = await request.close().timeout(
+        const Duration(seconds: 30),
+      );
       final text = await response.transform(utf8.decoder).join();
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw HttpException('API request failed (HTTP ${response.statusCode}). ${text.length > 240 ? text.substring(0, 240) : text}', uri: uri);
+        throw HttpException(
+          'API request failed (HTTP ${response.statusCode}). ${text.length > 240 ? text.substring(0, 240) : text}',
+          uri: uri,
+        );
       }
       if (text.isEmpty) return null;
       final decoded = jsonDecode(text);
-      if (decoded is Map && decoded['errors'] is List && (decoded['errors'] as List).isNotEmpty) {
-        throw HttpException('AniList: ${(decoded['errors'] as List).map((e) => e is Map ? e['message'] : e).join('; ')}', uri: uri);
+      if (decoded is Map &&
+          decoded['errors'] is List &&
+          (decoded['errors'] as List).isNotEmpty) {
+        throw HttpException(
+          'AniList: ${(decoded['errors'] as List).map((e) => e is Map ? e['message'] : e).join('; ')}',
+          uri: uri,
+        );
       }
       return decoded;
     } finally {
@@ -53,19 +73,39 @@ class AnimeApi {
     }
   }
 
-  static Future<dynamic> _aniList(String query, [Map<String, dynamic> variables = const {}]) async {
-    final result = await _request(Uri.parse(_aniListUrl), method: 'POST', body: {'query': query, 'variables': variables});
+  static Future<dynamic> _aniList(
+    String query, [
+    Map<String, dynamic> variables = const {},
+  ]) async {
+    final result = await _request(
+      Uri.parse(_aniListUrl),
+      method: 'POST',
+      body: {'query': query, 'variables': variables},
+    );
     return result is Map ? result['data'] : null;
   }
 
   static List<dynamic> extractList(dynamic data) {
     if (data is List) return data;
     if (data is Map) {
-      for (final key in ['results', 'data', 'animes', 'episodes', 'items', 'media']) {
+      for (final key in [
+        'results',
+        'data',
+        'animes',
+        'episodes',
+        'items',
+        'media',
+      ]) {
         final value = data[key];
         if (value is List) return value;
         if (value is Map) {
-          for (final nested in ['results', 'items', 'data', 'episodes', 'media']) {
+          for (final nested in [
+            'results',
+            'items',
+            'data',
+            'episodes',
+            'media',
+          ]) {
             if (value[nested] is List) return value[nested] as List<dynamic>;
           }
         }
@@ -74,18 +114,23 @@ class AnimeApi {
     return const [];
   }
 
-  static List<Anime> toAnimeList(dynamic data) => extractList(data)
-      .whereType<Map>()
-      .map((e) => Anime.fromJson(Map<String, dynamic>.from(e))).toList();
+  static List<Anime> toAnimeList(dynamic data) =>
+      extractList(data)
+          .whereType<Map>()
+          .map((e) => Anime.fromJson(Map<String, dynamic>.from(e)))
+          .toList();
 
   static Future<List<Anime>> search(String query) async {
-    final data = await _aniList('''
+    final data = await _aniList(
+      '''
       query (\$search: String) {
         Page(page: 1, perPage: 30) {
           media(search: \$search, type: ANIME, sort: SEARCH_MATCH) { $_mediaFields }
         }
       }
-    ''', {'search': query});
+    ''',
+      {'search': query},
+    );
     final page = data is Map ? data['Page'] : null;
     return toAnimeList(page is Map ? page['media'] : null);
   }
@@ -99,14 +144,17 @@ class AnimeApi {
   }
 
   static Future<List<Anime>> season() async {
-    final data = await _aniList('''
+    final data = await _aniList(
+      '''
       query (\$season: MediaSeason, \$year: Int) {
         Page(page: 1, perPage: 50) {
           media(type: ANIME, season: \$season, seasonYear: \$year,
             sort: POPULARITY_DESC) { $_mediaFields }
         }
       }
-    ''', {'season': _currentSeason(), 'year': DateTime.now().year});
+    ''',
+      {'season': _currentSeason(), 'year': DateTime.now().year},
+    );
     final page = data is Map ? data['Page'] : null;
     return toAnimeList(page is Map ? page['media'] : null);
   }
@@ -120,7 +168,8 @@ class AnimeApi {
     // AniList returns at most 50 entries per page. Fetch every page in the
     // two-week window so older aired episodes cannot crowd out upcoming days.
     for (var pageNumber = 1; pageNumber <= 20; pageNumber++) {
-      final data = await _aniList('''
+      final data = await _aniList(
+        '''
         query (\$page: Int, \$after: Int, \$before: Int) {
           Page(page: \$page, perPage: 50) {
             airingSchedules(
@@ -140,7 +189,9 @@ class AnimeApi {
             }
           }
         }
-      ''', {'page': pageNumber, 'after': weekAgo, 'before': weekAhead});
+      ''',
+        {'page': pageNumber, 'after': weekAgo, 'before': weekAhead},
+      );
 
       final page = data is Map ? data['Page'] : null;
       final entries = page is Map && page['airingSchedules'] is List
@@ -157,7 +208,8 @@ class AnimeApi {
 
   static Future<dynamic> getInfo({String? anilistId, String? malId}) async {
     if (anilistId != null && anilistId.isNotEmpty) {
-      final data = await _aniList('''
+      final data = await _aniList(
+        '''
         query (\$id: Int) {
           Media(id: \$id, type: ANIME) { $_mediaFields
             startDate { year month day }
@@ -167,11 +219,15 @@ class AnimeApi {
             recommendations(perPage: 10, sort: RATING_DESC) { nodes { mediaRecommendation { id title { userPreferred } coverImage { large } averageScore } } }
           }
         }
-      ''', {'id': int.tryParse(anilistId)});
+      ''',
+        {'id': int.tryParse(anilistId)},
+      );
       return data is Map ? data['Media'] : null;
     }
     if (malId != null && malId.isNotEmpty) {
-      return _request(Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(malId)}/full'));
+      return _request(
+        Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(malId)}/full'),
+      );
     }
     throw ArgumentError('An AniList ID or MAL ID is required.');
   }
@@ -195,12 +251,13 @@ class AnimeApi {
     final first = mappings.first;
     final kitsuId = first is Map
         ? first['relationships'] is Map
-            ? (first['relationships']['item'] is Map
-                ? first['relationships']['item']['data'] is Map
-                    ? first['relationships']['item']['data']['id']?.toString()
-                    : null
-                : null)
-            : null
+              ? (first['relationships']['item'] is Map
+                    ? first['relationships']['item']['data'] is Map
+                          ? first['relationships']['item']['data']['id']
+                                ?.toString()
+                          : null
+                    : null)
+              : null
         : null;
     if (kitsuId == null || kitsuId.isEmpty) return const [];
 
@@ -223,15 +280,21 @@ class AnimeApi {
         if (attributes is! Map) continue;
         final thumbnail = attributes['thumbnail'];
         final thumbnailUrl = thumbnail is Map
-            ? (thumbnail['original'] ?? thumbnail['large'] ?? thumbnail['small'])
+            ? (thumbnail['original'] ??
+                  thumbnail['large'] ??
+                  thumbnail['small'])
             : thumbnail;
         final titles = attributes['titles'];
-        final episodeTitle = attributes['canonicalTitle'] ??
-            (titles is Map ? (titles['en_us'] ?? titles['en_jp'] ?? titles['ja_jp']) : null);
+        final episodeTitle =
+            attributes['canonicalTitle'] ??
+            (titles is Map
+                ? (titles['en_us'] ?? titles['en_jp'] ?? titles['ja_jp'])
+                : null);
         episodes.add({
           'number': attributes['number'],
           'title': episodeTitle ?? '',
-          'description': attributes['synopsis'] ?? attributes['description'] ?? '',
+          'description':
+              attributes['synopsis'] ?? attributes['description'] ?? '',
           'thumbnail': thumbnailUrl ?? '',
         });
       }
@@ -240,26 +303,39 @@ class AnimeApi {
     return episodes;
   }
 
-  static Future<dynamic> getEpisodes({required String animeId, String source = 'anilist', String? malId}) async {
+  static Future<dynamic> getEpisodes({
+    required String animeId,
+    String source = 'anilist',
+    String? malId,
+  }) async {
     final id = int.tryParse(animeId);
     if (id == null) {
-      throw ArgumentError('A numeric AniList ID is required to load the episode list.');
+      throw ArgumentError(
+        'A numeric AniList ID is required to load the episode list.',
+      );
     }
 
     // AniList is the source of truth for the episode count/number sequence.
     // Kitsu enriches those numbered episodes with titles, thumbnails and synopsis.
-    final data = await _aniList('''
+    final data = await _aniList(
+      '''
       query (\$id: Int) {
         Media(id: \$id, type: ANIME) {
           id
           episodes
         }
       }
-    ''', {'id': id});
+    ''',
+      {'id': id},
+    );
     final media = data is Map ? data['Media'] : null;
-    final count = media is Map ? int.tryParse('${media['episodes'] ?? ''}') : null;
+    final count = media is Map
+        ? int.tryParse('${media['episodes'] ?? ''}')
+        : null;
     if (count == null || count < 1 || count > 500) {
-      throw Exception('AniList did not return a valid episode count for this anime.');
+      throw Exception(
+        'AniList did not return a valid episode count for this anime.',
+      );
     }
 
     List<dynamic> kitsuEpisodes = const [];
@@ -295,7 +371,8 @@ class AnimeApi {
   // Streaming is resolved through the user's configured AniScroll API server.
   static const streamingBaseUrl = 'http://16.176.100.190:3000';
 
-  static Future<dynamic> _streamRequest(String path) => _request(Uri.parse('$streamingBaseUrl$path'));
+  static Future<dynamic> _streamRequest(String path) =>
+      _request(Uri.parse('$streamingBaseUrl$path'));
 
   static Future<dynamic> getServers({
     required String animeId,
@@ -314,9 +391,13 @@ class AnimeApi {
       'source': source,
     };
     if (id == null && mal == null) {
-      throw ArgumentError('A numeric AniList ID or MAL ID is required for streaming.');
+      throw ArgumentError(
+        'A numeric AniList ID or MAL ID is required for streaming.',
+      );
     }
-    return _streamRequest('/api/servers?${Uri(queryParameters: queryParameters).query}');
+    return _streamRequest(
+      '/api/servers?${Uri(queryParameters: queryParameters).query}',
+    );
   }
 
   static Future<dynamic> watch({
@@ -328,9 +409,12 @@ class AnimeApi {
     String? server,
   }) {
     final id = int.tryParse(animeId);
-    final pathId = id != null ? '$id' : 'mal-${Uri.encodeComponent(malId ?? '')}';
+    final pathId = id != null
+        ? '$id'
+        : 'mal-${Uri.encodeComponent(malId ?? '')}';
     final uri = Uri(
-      path: '/api/watch/${Uri.encodeComponent(source)}/$pathId/$episode/${Uri.encodeComponent(type)}',
+      path:
+          '/api/watch/${Uri.encodeComponent(source)}/$pathId/$episode/${Uri.encodeComponent(type)}',
       queryParameters: server == null ? null : {'server': server},
     );
     return _streamRequest(uri.toString());
@@ -342,14 +426,27 @@ class AnimeApi {
       'AniList': () => _aniList('query { Viewer { id } }'),
       'Jikan': () => _request(Uri.parse('$_jikanUrl/anime/1')),
     }.entries) {
-      try { await entry.value(); results[entry.key] = 'online'; }
-      catch (e) { results[entry.key] = 'offline: $e'; }
+      try {
+        await entry.value();
+        results[entry.key] = 'online';
+      } catch (e) {
+        results[entry.key] = 'offline: $e';
+      }
     }
     return results;
   }
 
-  static Future<dynamic> malAnime(String id) => _request(Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(id)}'));
-  static Future<dynamic> malEpisodes(String id, {int page = 1}) => _request(Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(id)}/episodes?page=$page'));
-  static Future<dynamic> malCharacters(String id) => _request(Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(id)}/characters'));
-  static Future<dynamic> malRecommendations(String id) => _request(Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(id)}/recommendations'));
+  static Future<dynamic> malAnime(String id) =>
+      _request(Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(id)}'));
+  static Future<dynamic> malEpisodes(String id, {int page = 1}) => _request(
+    Uri.parse(
+      '$_jikanUrl/anime/${Uri.encodeComponent(id)}/episodes?page=$page',
+    ),
+  );
+  static Future<dynamic> malCharacters(String id) => _request(
+    Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(id)}/characters'),
+  );
+  static Future<dynamic> malRecommendations(String id) => _request(
+    Uri.parse('$_jikanUrl/anime/${Uri.encodeComponent(id)}/recommendations'),
+  );
 }

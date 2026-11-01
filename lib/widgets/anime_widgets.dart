@@ -1,6 +1,127 @@
-import 'package:flutter/material.dart'; import '../core/theme.dart'; import '../models/anime.dart';
-class AnimeCover extends StatelessWidget {const AnimeCover(this.url,{super.key});final String url;@override Widget build(BuildContext c)=>url.startsWith('http')?Image.network(url,fit:BoxFit.cover,width:double.infinity,errorBuilder:(_, _, _) =>const _Fallback()):const _Fallback();}
-class _Fallback extends StatelessWidget {const _Fallback();@override Widget build(BuildContext c)=>Container(color:appPanel,child:const Center(child:Icon(Icons.movie,color:appPurple,size:35)));}
-class AnimePoster extends StatelessWidget {const AnimePoster({super.key,required this.anime,required this.onTap,this.onLongPress});final Anime anime;final VoidCallback onTap;final VoidCallback? onLongPress;@override Widget build(BuildContext c)=>GestureDetector(onTap:onTap,onLongPress:onLongPress,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(14),child:Stack(fit:StackFit.expand,children:[AnimeCover(anime.image),Positioned(top:5,right:5,child:Chip(label:Text('★ ${anime.score}',style:const TextStyle(fontSize:9)),backgroundColor:appPanel,visualDensity:VisualDensity.compact))]))),const SizedBox(height:7),Text(anime.title,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.bold)),Text(anime.year,style:const TextStyle(color:appMuted,fontSize:10))]));}
-class AnimeRail extends StatelessWidget {const AnimeRail({super.key,required this.items,required this.onOpen});final List<Anime> items;final ValueChanged<Anime> onOpen;@override Widget build(BuildContext c)=>SizedBox(height:215,child:ListView(scrollDirection:Axis.horizontal,padding:const EdgeInsets.symmetric(horizontal:16),children:items.map((a)=>SizedBox(width:126,child:Padding(padding:const EdgeInsets.only(right:12),child:AnimePoster(anime:a,onTap:()=>onOpen(a))))).toList()));}
-class AnimeSection extends StatelessWidget {const AnimeSection({super.key,required this.title,required this.child});final String title;final Widget child;@override Widget build(BuildContext c)=>Column(children:[Padding(padding:const EdgeInsets.fromLTRB(20,22,18,12),child:Align(alignment:Alignment.centerLeft,child:Text(title,style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold)))),child]);}
+import 'package:flutter/material.dart';
+
+import '../core/theme.dart';
+import '../models/anime.dart';
+
+class AnimeCover extends StatelessWidget {
+  const AnimeCover(this.url, {super.key});
+  final String url;
+  @override
+  Widget build(BuildContext c) => url.startsWith('http')
+      ? Image.network(
+          url,
+          fit: BoxFit.cover,
+          width: double.infinity,
+          errorBuilder: (_, _, _) => const _Fallback(),
+        )
+      : const _Fallback();
+}
+
+class _Fallback extends StatelessWidget {
+  const _Fallback();
+  @override
+  Widget build(BuildContext c) => Container(
+    color: appPanel,
+    child: const Center(child: Icon(Icons.movie, color: appPurple, size: 35)),
+  );
+}
+
+class AnimePoster extends StatelessWidget {
+  const AnimePoster({
+    super.key,
+    required this.anime,
+    required this.onTap,
+    this.onLongPress,
+  });
+  final Anime anime;
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  @override
+  Widget build(BuildContext c) => GestureDetector(
+    onTap: onTap,
+    onLongPress: onLongPress,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(14),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                AnimeCover(anime.image),
+                Positioned(
+                  top: 5,
+                  right: 5,
+                  child: Chip(
+                    label: Text(
+                      '★ ${anime.score}',
+                      style: const TextStyle(fontSize: 9),
+                    ),
+                    backgroundColor: appPanel,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          anime.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        Text(anime.year, style: const TextStyle(color: appMuted, fontSize: 10)),
+      ],
+    ),
+  );
+}
+
+class AnimeRail extends StatelessWidget {
+  const AnimeRail({super.key, required this.items, required this.onOpen});
+  final List<Anime> items;
+  final ValueChanged<Anime> onOpen;
+  @override
+  Widget build(BuildContext c) => SizedBox(
+    height: 215,
+    child: ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      children: items
+          .map(
+            (a) => SizedBox(
+              width: 126,
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: AnimePoster(anime: a, onTap: () => onOpen(a)),
+              ),
+            ),
+          )
+          .toList(),
+    ),
+  );
+}
+
+class AnimeSection extends StatelessWidget {
+  const AnimeSection({super.key, required this.title, required this.child});
+  final String title;
+  final Widget child;
+  @override
+  Widget build(BuildContext c) => Column(
+    children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 22, 18, 12),
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            title,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+      child,
+    ],
+  );
+}
