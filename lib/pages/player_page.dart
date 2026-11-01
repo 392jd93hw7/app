@@ -114,7 +114,8 @@ class _PlayerPageState extends State<PlayerPage> {
         'No available server could start playback.',
         ..._failures,
         'Direct M3U8 fallback is disabled.',
-      ].join('\n')));
+      ].join('
+')));
     }
     return false;
   }
@@ -189,7 +190,9 @@ class _PlayerPageState extends State<PlayerPage> {
       if (value.isCompleted) {
         setState(() => _status = PlayerStatus.completed);
       } else if (value.isPlaying) {
-        if (_status != PlayerStatus.playing) {\n          setState(() => _status = PlayerStatus.playing);\n        }
+        if (_status != PlayerStatus.playing) {
+          setState(() => _status = PlayerStatus.playing);
+        }
         debugPrint('[PLAYER] Buffering ended / playback active');
       } else if (value.isInitialized && _status != PlayerStatus.paused) {
         setState(() => _status = PlayerStatus.ready);
@@ -240,7 +243,9 @@ class _PlayerPageState extends State<PlayerPage> {
     _type = _type == 'sub' ? 'dub' : 'sub';
     await old?.pause();
     await old?.dispose();
-    if (mounted) {\n      setState(() => _controller = null);\n    }
+    if (mounted) {
+      setState(() => _controller = null);
+    }
     await _loadServers();
   }
 
